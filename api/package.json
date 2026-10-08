@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "seed": "node scripts/seed.js",
+    "reset": "node scripts/reset.js && npm run seed"
   },
   "keywords": [],
   "author": "",
