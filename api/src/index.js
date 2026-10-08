@@ -11,6 +11,20 @@ app.use(express.json());
 const dbPath = process.env.DB_FILE || path.join(__dirname, '../data/demo.db');
 const db = new Database(dbPath);
 
+const requireAuth = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'unauthorized', message: 'Missing or invalid token' });
+  }
+  const token = authHeader.substring(7);
+  const actor = db.prepare('SELECT * FROM actors WHERE token = ?').get(token);
+  if (!actor) {
+    return res.status(401).json({ error: 'unauthorized', message: 'Missing or invalid token' });
+  }
+  req.actor = actor;
+  next();
+};
+
 app.post('/api/login', (req, res) => {
   const { username } = req.body;
   if (!username) {
@@ -24,6 +38,7 @@ app.post('/api/login', (req, res) => {
   }
 
   const token = crypto.randomUUID();
+  db.prepare('UPDATE actors SET token = ? WHERE id = ?').run(token, actor.id);
   
   res.status(200).json({
     token,

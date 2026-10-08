@@ -22,7 +22,8 @@ db.exec(`
     role TEXT,
     name TEXT,
     place TEXT,
-    address TEXT
+    address TEXT,
+    token TEXT
   );
 
   CREATE TABLE batches (
