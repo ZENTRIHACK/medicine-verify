@@ -135,5 +135,21 @@ export const api = {
       throw new Error(err.message || 'OCR verification failed');
     }
     return res.json();
+  },
+
+  getAlerts: async () => {
+    if (useMocks) {
+      return [
+        { id: 1, serial: 'K7Q2M9XW4TBH3N8D', type: 'double_dispense', at: new Date().toISOString(), details: 'Dispensed at Mlimani Pharmacy (demo) and Kaaga Chemist (demo)' }
+      ];
+    }
+    const res = await fetch('/api/alerts', {
+      headers: getHeaders()
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.message || 'Failed to fetch alerts');
+    }
+    return res.json();
   }
 };
