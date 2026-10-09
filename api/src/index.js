@@ -4,6 +4,8 @@ const crypto = require('crypto');
 const Database = require('better-sqlite3');
 const path = require('path');
 const integrations = require('./integrations');
+const multer = require('multer');
+const upload = multer();
 
 const app = express();
 app.use(cors());
@@ -245,6 +247,104 @@ app.post('/api/dispense', requireAuth, async (req, res) => {
   }
 
   return res.status(200).json({ result: 'ok', txHash, flags });
+});
+
+app.get('/api/verify/:serial', (req, res) => {
+  const { serial } = req.params;
+  const pack = db.prepare('SELECT * FROM packs WHERE serial = ?').get(serial);
+
+  if (!pack) {
+    return res.status(200).json({ 
+      serial, 
+      status: "unknown", 
+      product: null, 
+      currentHolder: null, 
+      trail: [], 
+      flags: [] 
+    });
+  }
+
+  const batch = db.prepare('SELECT * FROM batches WHERE id = ?').get(pack.batchId);
+  const holder = db.prepare('SELECT name, place FROM actors WHERE id = ?').get(pack.currentHolderId);
+  
+  const events = db.prepare(`
+    SELECT e.type, e.at, e.txHash, a.name as actorName, a.place 
+    FROM events e 
+    LEFT JOIN actors a ON e.actorId = a.id 
+    WHERE e.packSerial = ? 
+    ORDER BY e.at ASC
+  `).all(serial);
+
+  const trail = events.map(e => ({ 
+    type: e.type, 
+    actorName: e.actorName, 
+    place: e.place, 
+    at: e.at, 
+    txHash: e.txHash 
+  }));
+
+  const alerts = db.prepare('SELECT * FROM alerts WHERE serial = ?').all(serial);
+  
+  const flags = [];
+  if (alerts.some(a => a.type === 'ocr_mismatch')) {
+    flags.push("Pack photo did not match the registered record");
+  }
+  
+  let derivedStatus = 'unknown';
+  if (alerts.some(a => a.type === 'double_dispense')) {
+    derivedStatus = 'conflict';
+  } else if (pack.status === 'dispensed') {
+    derivedStatus = 'dispensed';
+  } else if (pack.status === 'in_custody') {
+    derivedStatus = 'in_custody';
+  } else if (pack.status === 'registered') {
+    derivedStatus = 'registered';
+  }
+
+  return res.status(200).json({
+    serial,
+    status: derivedStatus,
+    product: batch ? {
+      productName: batch.productName,
+      batchNo: batch.batchNo,
+      expiry: batch.expiry
+    } : null,
+    currentHolder: holder ? {
+      name: holder.name,
+      place: holder.place
+    } : null,
+    trail,
+    flags
+  });
+});
+
+app.post('/api/verify/ocr', upload.single('image'), async (req, res) => {
+  const { serial } = req.body;
+  
+  const pack = db.prepare('SELECT * FROM packs WHERE serial = ?').get(serial);
+  if (!pack) {
+    return res.status(404).json({ error: 'unknown_serial', message: 'No registered record found' });
+  }
+  
+  const batch = db.prepare('SELECT * FROM batches WHERE id = ?').get(pack.batchId);
+
+  const { batchNo, expiry, manufacturer, confidence } = await integrations.ocr.extractPackFields(req.file.buffer, req.file.mimetype);
+  
+  const { match, differences } = await integrations.ocr.comparePack(
+    { batchNo, expiry, manufacturer }, 
+    { batchNo: batch.batchNo, expiry: batch.expiry, manufacturer: 'Zenocare Labs' }
+  );
+
+  if (match === 'mismatch') {
+    db.prepare(`INSERT INTO alerts (serial, type, at) VALUES (?, 'ocr_mismatch', ?)`).run(serial, new Date().toISOString());
+  }
+
+  return res.status(200).json({ 
+    extracted: { batchNo, expiry, manufacturer }, 
+    confidence, 
+    match, 
+    differences 
+  });
 });
 
 const PORT = process.env.PORT || 3001;
