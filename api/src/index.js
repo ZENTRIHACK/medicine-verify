@@ -115,6 +115,132 @@ app.post('/api/batches', requireAuth, async (req, res) => {
   res.status(201).json({ batchId, serials });
 });
 
+app.post('/api/custody/transfer', requireAuth, async (req, res) => {
+  const { serials, toActorId } = req.body;
+  if (!Array.isArray(serials) || !toActorId) {
+    return res.status(400).json({ error: 'bad_request', message: 'Missing serials or toActorId' });
+  }
+
+  const recipient = db.prepare('SELECT * FROM actors WHERE id = ?').get(toActorId);
+  if (!recipient || (recipient.role !== 'distributor' && recipient.role !== 'pharmacy')) {
+    return res.status(400).json({ error: 'bad_request', message: 'Invalid recipient' });
+  }
+
+  const getPack = db.prepare('SELECT * FROM packs WHERE serial = ?');
+  
+  for (const serial of serials) {
+    const pack = getPack.get(serial);
+    if (!pack) {
+      return res.status(404).json({ error: 'unknown_serial', message: 'Serial not found' });
+    }
+    if (pack.currentHolderId !== req.actor.id) {
+      return res.status(403).json({ error: 'forbidden', message: 'You do not hold this serial' });
+    }
+  }
+
+  const now = new Date().toISOString();
+  const updatePack = db.prepare(`UPDATE packs SET currentHolderId = ?, status = 'in_custody' WHERE serial = ?`);
+  const insertEvent = db.prepare(`INSERT INTO events (packSerial, type, actorId, at, details) VALUES (?, 'transferred', ?, ?, ?)`);
+
+  const tx = db.transaction(() => {
+    for (const serial of serials) {
+      updatePack.run(toActorId, serial);
+      insertEvent.run(serial, req.actor.id, now, JSON.stringify({ to: toActorId }));
+    }
+  });
+
+  try {
+    tx();
+  } catch (err) {
+    return res.status(500).json({ error: 'server_error', message: 'Database error' });
+  }
+
+  const txHashes = [];
+  try {
+    for (const serial of serials) {
+      const { txHash } = await integrations.chain.transfer(serial, req.actor.address, recipient.address);
+      if (txHash) {
+        txHashes.push(txHash);
+        db.prepare(`UPDATE events SET txHash = ? WHERE packSerial = ? AND type = 'transferred' AND at = ?`).run(txHash, serial, now);
+      }
+    }
+  } catch (err) {
+    console.error('Chain integration failed:', err);
+  }
+
+  return res.status(200).json({ ok: true, transferred: serials.length, txHashes });
+});
+
+app.post('/api/dispense', requireAuth, async (req, res) => {
+  if (req.actor.role !== 'pharmacy') {
+    return res.status(403).json({ error: 'forbidden', message: 'Only pharmacies can dispense' });
+  }
+
+  const { serial } = req.body;
+  if (!serial) {
+    return res.status(400).json({ error: 'bad_request', message: 'Missing serial' });
+  }
+
+  const now = new Date().toISOString();
+  const pack = db.prepare('SELECT * FROM packs WHERE serial = ?').get(serial);
+  
+  if (!pack) {
+    db.prepare(`INSERT INTO alerts (serial, type, at) VALUES (?, 'unknown_serial', ?)`).run(serial, now);
+    return res.status(404).json({ error: 'unknown_serial', message: 'No registered record found' });
+  }
+
+  const dispensedEvent = db.prepare(`SELECT * FROM events WHERE packSerial = ? AND type = 'dispensed'`).get(serial);
+
+  if (dispensedEvent) {
+    const conflictTx = db.transaction(() => {
+      db.prepare(`INSERT INTO events (packSerial, type, actorId, at) VALUES (?, 'conflict', ?, ?)`).run(serial, req.actor.id, now);
+      db.prepare(`INSERT INTO alerts (serial, type, at) VALUES (?, 'double_dispense', ?)`).run(serial, now);
+    });
+    conflictTx();
+    
+    const firstActor = db.prepare(`SELECT name FROM actors WHERE id = ?`).get(dispensedEvent.actorId);
+    
+    let txHash = null;
+    try {
+      const result = await integrations.chain.dispense(serial, req.actor.address);
+      txHash = result.txHash;
+      if (txHash) {
+         db.prepare(`UPDATE events SET txHash = ? WHERE packSerial = ? AND type = 'conflict' AND at = ?`).run(txHash, serial, now);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    
+    return res.status(200).json({
+      result: 'conflict',
+      txHash,
+      conflictWith: {
+        actorName: firstActor ? firstActor.name : 'Unknown',
+        at: dispensedEvent.at
+      }
+    });
+  }
+
+  const okTx = db.transaction(() => {
+    db.prepare(`UPDATE packs SET status = 'dispensed' WHERE serial = ?`).run(serial);
+    db.prepare(`INSERT INTO events (packSerial, type, actorId, at) VALUES (?, 'dispensed', ?, ?)`).run(serial, req.actor.id, now);
+  });
+  okTx();
+  
+  let txHash = null;
+  try {
+    const result = await integrations.chain.dispense(serial, req.actor.address);
+    txHash = result.txHash;
+    if (txHash) {
+      db.prepare(`UPDATE events SET txHash = ? WHERE packSerial = ? AND type = 'dispensed' AND at = ?`).run(txHash, serial, now);
+    }
+  } catch (err) {
+    console.error(err);
+  }
+
+  return res.status(200).json({ result: 'ok', txHash });
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
