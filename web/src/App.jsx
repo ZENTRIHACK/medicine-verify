@@ -1,33 +1,49 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useState, useEffect } from 'react'
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import Login from './pages/Login.jsx'
+import Dashboard from './pages/Dashboard.jsx'
+import PublicVerify from './pages/PublicVerify.jsx'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [actor, setActor] = useState(() => {
+    const stored = localStorage.getItem('actor');
+    return stored ? JSON.parse(stored) : null;
+  });
+
+  const navigate = useNavigate();
+
+  const handleLogin = (actorData, token) => {
+    localStorage.setItem('token', token);
+    localStorage.setItem('actor', JSON.stringify(actorData));
+    setActor(actorData);
+    navigate('/dashboard');
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('actor');
+    setActor(null);
+    navigate('/login');
+  };
 
   return (
     <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
+      {actor && (
+        <header className="header">
+          <h1>MedVerify — {actor.name}</h1>
+          <button onClick={handleLogout}>Logout</button>
+        </header>
+      )}
+      <Routes>
+        <Route path="/login" element={
+          actor ? <Navigate to="/dashboard" /> : <Login onLogin={handleLogin} />
+        } />
+        <Route path="/dashboard" element={
+          actor ? <Dashboard actor={actor} /> : <Navigate to="/login" />
+        } />
+        <Route path="/v/:serial" element={<PublicVerify />} />
+        <Route path="*" element={<Navigate to={actor ? "/dashboard" : "/login"} />} />
+      </Routes>
     </>
   )
 }
