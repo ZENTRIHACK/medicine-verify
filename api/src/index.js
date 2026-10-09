@@ -189,6 +189,11 @@ app.post('/api/dispense', requireAuth, async (req, res) => {
     return res.status(404).json({ error: 'unknown_serial', message: 'No registered record found' });
   }
 
+  const flags = [];
+  if (pack.currentHolderId !== req.actor.id) {
+    flags.push("No custody record before dispensing");
+  }
+
   const dispensedEvent = db.prepare(`SELECT * FROM events WHERE packSerial = ? AND type = 'dispensed'`).get(serial);
 
   if (dispensedEvent) {
@@ -214,6 +219,7 @@ app.post('/api/dispense', requireAuth, async (req, res) => {
     return res.status(200).json({
       result: 'conflict',
       txHash,
+      flags,
       conflictWith: {
         actorName: firstActor ? firstActor.name : 'Unknown',
         at: dispensedEvent.at
@@ -238,10 +244,10 @@ app.post('/api/dispense', requireAuth, async (req, res) => {
     console.error(err);
   }
 
-  return res.status(200).json({ result: 'ok', txHash });
+  return res.status(200).json({ result: 'ok', txHash, flags });
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });
