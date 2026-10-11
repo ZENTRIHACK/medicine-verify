@@ -48,7 +48,7 @@ function generateSerialSet(count) {
   return [...serials];
 }
 
-async function safeChain(fn, fallback) {
+async function withChain(fn, fallback) {
   try {
     const result = await fn();
     return result || fallback;
@@ -160,7 +160,7 @@ app.post('/api/batches', requireAuth, requireRole('manufacturer'), async (req, r
   const serials = generateSerialSet(count);
 
   try {
-    const chainResult = await safeChain(
+    const chainResult = await withChain(
       () => chain.registerPacks(serials, { actor: req.actor.address, batchNo }),
       { txHash: null }
     );
@@ -262,7 +262,7 @@ app.post('/api/custody/transfer', requireAuth, requireRole('manufacturer', 'dist
   }
 
   try {
-    const chainResult = await safeChain(
+    const chainResult = await withChain(
       () => chain.transfer(cleanSerials, {
         from: req.actor.address,
         to: destination.address
@@ -355,7 +355,7 @@ app.post('/api/dispense', requireAuth, requireRole('pharmacy'), async (req, res)
   }
 
   try {
-    const chainResult = await safeChain(
+    const chainResult = await withChain(
       () => chain.dispense([cleanSerial], { actor: req.actor.address }),
       { txHash: null }
     );
