@@ -18,38 +18,63 @@ const teardownChains = new Map();
 
 function messageForError(error) {
   const name = error && error.name ? String(error.name) : '';
-  if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+  const message = error && error.message ? String(error.message) : '';
+  if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || /permission|denied/i.test(message)) {
     return SCANNER_ERROR_MESSAGES.camera_denied;
   }
-  if (name === 'NotFoundError' || name === 'DevicesNotFoundError' || name === 'OverconstrainedError') {
+  if (name === 'NotFoundError' || name === 'DevicesNotFoundError' || name === 'OverconstrainedError' || /no camera|not found/i.test(message)) {
     return SCANNER_ERROR_MESSAGES.camera_unavailable;
   }
-  if (name === 'NotReadableError' || name === 'TrackStartError') {
+  if (name === 'NotReadableError' || name === 'TrackStartError' || /could not start|in use/i.test(message)) {
     return SCANNER_ERROR_MESSAGES.camera_in_use;
   }
   return SCANNER_ERROR_MESSAGES.generic;
 }
 
-function serializedTeardown(elementId, scanner) {
-  const previous = teardownChains.get(elementId) || Promise.resolve();
+/**
+ * Releases a scanner instance.
+ *
+ * `Html5Qrcode#stop()` is always promise-based, but `clear()` is NOT: in
+ * html5-qrcode 2.3.8 `clear()` is synchronous, returns `undefined`, and throws
+ * a bare string when the scan is still running. Attaching `.catch()` to its
+ * return value therefore raises a TypeError and takes the React cleanup down
+ * with it, which is exactly the failure mode that wedges the camera. Only
+ * attach a rejection handler when a thenable is actually returned.
+ */
+function releaseScanner(scanner) {
+  if (!scanner) return Promise.resolve();
 
-  const next = previous
-    .catch(() => {})
-    .then(async () => {
-      if (!scanner) return;
+  let stopping = Promise.resolve();
+  try {
+    if (scanner.isScanning) stopping = scanner.stop();
+  } catch (error) {
+    console.error('[scanner] stop threw:', error);
+  }
+
+  const stopSettled = stopping && typeof stopping.catch === 'function'
+    ? stopping.catch((error) => console.error('[scanner] stop rejected:', error))
+    : Promise.resolve();
+
+  return stopSettled
+    .then(() => {
       try {
-        if (scanner.isScanning) await scanner.stop();
+        const outcome = scanner.clear();
+        if (outcome && typeof outcome.catch === 'function') return outcome.catch(console.error);
+        return undefined;
       } catch (error) {
-        console.error('[scanner] stop failed:', error);
-      }
-      try {
-        await scanner.clear();
-      } catch (error) {
-        console.error('[scanner] clear failed:', error);
+        console.error('[scanner] clear threw:', error);
+        return undefined;
       }
     })
     .catch((error) => console.error('[scanner] teardown failed:', error));
+}
 
+function serializedTeardown(elementId, scanner) {
+  const previous = teardownChains.get(elementId) || Promise.resolve();
+  const next = previous
+    .catch(() => {})
+    .then(() => releaseScanner(scanner))
+    .catch((error) => console.error('[scanner] teardown failed:', error));
   teardownChains.set(elementId, next);
   return next;
 }
@@ -74,6 +99,9 @@ export default function useQrScanner(elementId, onScan) {
     };
 
     const boot = async () => {
+      // StrictMode mounts, unmounts and remounts. Wait for the previous
+      // instance to fully release the device before claiming it again,
+      // otherwise the second mount races a half-torn-down camera.
       await pendingTeardown(elementId);
       if (!active) return;
 
@@ -101,10 +129,8 @@ export default function useQrScanner(elementId, onScan) {
         );
         if (!active) await serializedTeardown(elementId, scanner);
       } catch (error) {
-        if (active) {
-          await serializedTeardown(elementId, scanner);
-          notify(new Error(messageForError(error)));
-        }
+        await serializedTeardown(elementId, scanner);
+        notify(new Error(messageForError(error)));
       }
     };
 
