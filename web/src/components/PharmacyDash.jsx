@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import useQrScanner, { SCANNER_ERROR_MESSAGES } from '../hooks/useQrScanner';
 import { api } from '../api';
-import { strings } from '../lib/lexicon';
+import strings from '../strings.json';
 
 const SCANNER_ID = 'pharmacy-qr-reader';
 
@@ -24,7 +24,7 @@ export default function PharmacyDash() {
       setResult(response);
       if (response?.result === 'ok') setSerial('');
     } catch {
-      setError('Unable to submit this serial. Please try again.');
+      setError(strings.messages.dispenseError);
     } finally {
       busyRef.current = false;
     }
@@ -59,7 +59,7 @@ export default function PharmacyDash() {
           <button type="submit" disabled={!serial.trim() || busyRef.current}>Submit</button>
         </form>
         {error && <div className="alert alert--flag" role="alert">{error}</div>}
-        {result?.result === 'ok' && <div className="alert alert--ok" role="status">Dispensing recorded successfully.</div>}
+        {result?.result === 'ok' && <div className="alert alert--ok" role="status">{strings.messages.dispenseOk}</div>}
         {result?.result === 'conflict' && (
           <div className="alert alert--conflict" role="alert">
             <strong>{strings.status.conflict}</strong>

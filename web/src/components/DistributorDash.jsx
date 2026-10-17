@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import useQrScanner, { SCANNER_ERROR_MESSAGES } from '../hooks/useQrScanner';
 import { api } from '../api';
+import strings from '../strings.json';
 
 const SCANNER_ID = 'distributor-qr-reader';
 
@@ -37,10 +38,10 @@ export default function DistributorDash() {
     setError('');
     try {
       await api.transferCustody(serialsList, toActorId.trim());
-      setMessage('Custody transfer submitted successfully.');
+      setMessage(strings.messages.custodyTransferred);
       setSerialsList([]);
     } catch {
-      setError('Unable to transfer custody.');
+      setError(strings.messages.custodyError);
     }
   }
 

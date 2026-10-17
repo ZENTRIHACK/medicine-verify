@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { api } from '../api';
+import strings from '../strings.json';
 
 export default function ManufacturerDash() {
   const [batch, setBatch] = useState({ productName: '', batchNo: '', expiry: '', quantity: '' });
@@ -16,8 +17,8 @@ export default function ManufacturerDash() {
     try {
       const response = await api.registerBatch({ ...batch, quantity: Number(batch.quantity) });
       setSerials(response.serials || []);
-      setMessage('Batch registered successfully.');
-    } catch { setError('Unable to register this batch.'); }
+      setMessage(strings.messages.batchRegistered);
+    } catch { setError(strings.messages.batchError); }
   }
 
   async function transfer(event) {
@@ -27,8 +28,8 @@ export default function ManufacturerDash() {
     setMessage(''); setError('');
     try {
       await api.transferCustody(list, toActorId.trim());
-      setMessage('Custody transfer submitted successfully.');
-    } catch { setError('Unable to transfer custody.'); }
+      setMessage(strings.messages.custodyTransferred);
+    } catch { setError(strings.messages.custodyError); }
   }
 
   return <main className="page-container manufacturer-dashboard">

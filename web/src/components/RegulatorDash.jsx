@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { eventLabel } from '../lib/lexicon';
+import strings from '../strings.json';
 
 function detailText(details) {
   if (typeof details === 'string' && details) return details;
@@ -21,7 +22,7 @@ export default function RegulatorDash() {
       if (!active) return;
       const items = Array.isArray(response) ? response : response?.alerts || [];
       setAlerts([...items].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()));
-    }).catch(() => { if (active) setError('Unable to load alerts.'); });
+    }).catch(() => { if (active) setError(strings.messages.alertsError); });
     return () => { active = false; };
   }, []);
 
@@ -31,7 +32,7 @@ export default function RegulatorDash() {
         <h1>Regulator dashboard</h1>
         {error && <div className="alert alert--flag" role="alert">{error}</div>}
         {!error && alerts.length === 0 ? (
-          <p>No alerts to display.</p>
+          <p>{strings.messages.noAlerts}</p>
         ) : (
           <div className="table-wrap">
             <table>
