@@ -151,7 +151,7 @@ export default function PharmacyDash({ actor }) {
       {/* Result */}
       {result && result.result === 'ok' && (
         <div className="banner banner-ok" style={{ marginTop: '1rem' }}>
-          ✓ Dispensed successfully
+          ✓ {strings.messages?.dispenseOk || 'Dispensed successfully'}
           {result.flags && result.flags.length > 0 && (
             <ul className="flag-list" style={{ marginTop: '0.5rem' }}>
               {result.flags.map((flag, i) => <li key={i} className="flag-item">{flag}</li>)}

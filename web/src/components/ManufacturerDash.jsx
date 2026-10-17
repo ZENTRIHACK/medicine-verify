@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { api } from '../api'
+import strings from '../strings.json'
 
 export default function ManufacturerDash({ actor }) {
   // Batch registration state
@@ -34,7 +35,7 @@ export default function ManufacturerDash({ actor }) {
       setBatchId(data.batchId);
       setSerials(data.serials);
     } catch (err) {
-      setBatchError(err.message);
+      setBatchError(err.message || strings.messages?.batchError);
     } finally {
       setBatchLoading(false);
     }
@@ -53,7 +54,7 @@ export default function ManufacturerDash({ actor }) {
       const data = await api.transferCustody(serialsArray, parseInt(toActorId, 10));
       setTransferResult(data);
     } catch (err) {
-      setTransferError(err.message);
+      setTransferError(err.message || strings.messages?.custodyError);
     } finally {
       setTransferLoading(false);
     }
@@ -139,7 +140,7 @@ export default function ManufacturerDash({ actor }) {
         {transferError && <div className="banner banner-danger" style={{ marginTop: '0.75rem' }}>{transferError}</div>}
         {transferResult && (
           <div className="banner banner-ok" style={{ marginTop: '0.75rem' }}>
-            ✓ Transferred {transferResult.transferred} serial(s)
+            ✓ {strings.messages?.custodyTransferred || `Transferred ${transferResult.transferred} serial(s)`}
           </div>
         )}
       </div>

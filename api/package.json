@@ -5,6 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node src/index.js",
+    "dev": "node src/index.js",
     "seed": "node scripts/seed.js",
     "reset": "node scripts/reset.js && npm run seed"
   },

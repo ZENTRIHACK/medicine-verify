@@ -12,5 +12,15 @@
     "unreadable": "Could not read the pack clearly"
   },
   "disclaimer": "This check confirms a pack matches a registry record. It does not test the medicine inside.",
+  "messages": {
+    "batchRegistered": "Batch registered successfully.",
+    "batchError": "Unable to register this batch.",
+    "custodyTransferred": "Custody transfer submitted successfully.",
+    "custodyError": "Unable to transfer custody.",
+    "dispenseOk": "Dispensing recorded successfully.",
+    "dispenseError": "Unable to submit this serial. Please try again.",
+    "alertsError": "Unable to load alerts.",
+    "noAlerts": "No alerts to display."
+  },
   "forbiddenWords": ["genuine", "safe", "fake", "authentic"]
 }
