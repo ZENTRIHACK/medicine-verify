@@ -89,9 +89,15 @@ function mockLogin(username) {
   };
 }
 
+function mockHex(bytes = 16) {
+  const buf = new Uint8Array(bytes);
+  window.crypto.getRandomValues(buf);
+  return Array.from(buf, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 function mockRegisterBatch({ quantity = 1 }) {
   const serials = Array.from({ length: Number(quantity) || 1 }, (_, index) => `MOCK${String(index + 1).padStart(4, '0')}`);
-  return { batchId: Date.now(), serials, txHash: `0xmock${Math.random().toString(16).slice(2)}` };
+  return { batchId: Date.now(), serials, txHash: `0xmock${mockHex()}` };
 }
 
 /* ------------------------------ api surface ------------------------------ */
