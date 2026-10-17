@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import useQrScanner, { SCANNER_ERROR_MESSAGES } from '../hooks/useQrScanner';
 import { api } from '../api';
-import strings from '../../../spec/strings.json';
+import { strings } from '../lib/lexicon';
 
 const SCANNER_ID = 'pharmacy-qr-reader';
 
