@@ -1,79 +1,179 @@
-import { useCallback, useRef, useState } from 'react';
-import useQrScanner, { SCANNER_ERROR_MESSAGES } from '../hooks/useQrScanner';
-import { api } from '../api';
-import strings from '../strings.json';
+import { useState, useEffect, useRef } from 'react'
+import { api } from '../api'
+import strings from '../strings.json'
 
-const SCANNER_ID = 'pharmacy-qr-reader';
+/**
+ * Releases a camera scanner without ever throwing.
+ *
+ * html5-qrcode's stop() is asynchronous but clear() is synchronous, and clear()
+ * throws the string "Cannot clear while scan is ongoing, close it first." if it
+ * runs while the scan is still live. Calling clear() immediately after an
+ * un-awaited stop() therefore throws inside the React cleanup, the camera is
+ * never released, and the video indicator stays on. stop() is awaited first,
+ * and both calls are guarded so neither a rejected promise nor a synchronous
+ * throw can escape.
+ */
+async function releaseScanner(scanner) {
+  if (!scanner) return;
+  try {
+    if (scanner.isScanning) await scanner.stop();
+  } catch {
+    /* already stopped or never started */
+  }
+  try {
+    const cleared = scanner.clear();
+    if (cleared && typeof cleared.catch === 'function') await cleared;
+  } catch {
+    /* viewport already cleared */
+  }
+}
 
-export default function PharmacyDash() {
+export default function PharmacyDash({ actor }) {
   const [serial, setSerial] = useState('');
   const [result, setResult] = useState(null);
-  const [error, setError] = useState('');
-  const [cameraError, setCameraError] = useState('');
-  const busyRef = useRef(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [scanning, setScanning] = useState(false);
+  const scannerRef = useRef(null);
 
-  const submitSerial = useCallback(async (value) => {
-    const clean = typeof value === 'string' ? value.trim() : '';
-    if (!clean || busyRef.current) return;
-    busyRef.current = true;
-    setResult(null);
-    setError('');
-    setCameraError('');
-    try {
-      const response = await api.dispense(clean);
-      setResult(response);
-      if (response?.result === 'ok') setSerial('');
-    } catch {
-      setError(strings.messages.dispenseError);
-    } finally {
-      busyRef.current = false;
-    }
+  useEffect(() => {
+    return () => {
+      void releaseScanner(scannerRef.current);
+      scannerRef.current = null;
+    };
   }, []);
 
-  const handleCamera = useCallback((value, cameraError) => {
-    if (cameraError) {
-      setCameraError(cameraError.message || SCANNER_ERROR_MESSAGES.generic);
-      return;
+  const startScanner = async () => {
+    if (scannerRef.current) {
+      const previous = scannerRef.current;
+      scannerRef.current = null;
+      await releaseScanner(previous);
     }
-    setCameraError('');
-    void submitSerial(value);
-  }, [submitSerial]);
 
-  useQrScanner(SCANNER_ID, handleCamera);
+    setScanning(true);
+    setResult(null);
+    setError(null);
+
+    // dynamic import to avoid SSR issues
+    const { Html5Qrcode } = await import('html5-qrcode');
+    const scanner = new Html5Qrcode('pharmacy-qr-reader');
+    scannerRef.current = scanner;
+
+    try {
+      await scanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText) => {
+          // Extract serial from URL if scanned a full URL
+          let scannedSerial = decodedText;
+          const match = decodedText.match(/\/v\/(.+)$/);
+          if (match) scannedSerial = match[1];
+
+          void releaseScanner(scanner);
+          setScanning(false);
+          handleDispense(scannedSerial);
+        },
+        () => {} // ignore scan failures
+      );
+    } catch (err) {
+      setScanning(false);
+      setError('Could not access camera: ' + err);
+    }
+  };
+
+  const stopScanner = async () => {
+    const previous = scannerRef.current;
+    scannerRef.current = null;
+    await releaseScanner(previous);
+    setScanning(false);
+  };
+
+  const handleDispense = async (dispenseSerial) => {
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const data = await api.dispense(dispenseSerial);
+      setResult(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleManualSubmit = (e) => {
+    e.preventDefault();
+    if (!serial.trim()) return;
+    if (scannerRef.current) {
+      void releaseScanner(scannerRef.current);
+      scannerRef.current = null;
+      setScanning(false);
+    }
+    handleDispense(serial.trim());
+  };
 
   return (
-    <main className="page-container">
-      <section className="card">
-        <h1>Pharmacy dashboard</h1>
-        <div id={SCANNER_ID} className="qr-reader" />
-        {cameraError && <div className="alert alert--flag" role="alert">{cameraError}</div>}
-        <form onSubmit={(event) => { event.preventDefault(); void submitSerial(serial); }}>
-          <label htmlFor="pharmacy-serial">Serial</label>
-          <input
-            id="pharmacy-serial"
-            value={serial}
-            onChange={(event) => setSerial(event.target.value)}
-            placeholder="Scan or enter a serial"
-            autoComplete="off"
-          />
-          <button type="submit" disabled={!serial.trim() || busyRef.current}>Submit</button>
-        </form>
-        {error && <div className="alert alert--flag" role="alert">{error}</div>}
-        {result?.result === 'ok' && <div className="alert alert--ok" role="status">{strings.messages.dispenseOk}</div>}
-        {result?.result === 'conflict' && (
-          <div className="alert alert--conflict" role="alert">
-            <strong>{strings.status.conflict}</strong>
-            <p>Actor: {result.conflictWith?.actorName || '—'}</p>
-            <p>At: {result.conflictWith?.at || '—'}</p>
-          </div>
+    <div>
+      <h2 className="page-title">Pharmacy — Dispense</h2>
+
+      {/* Scanner */}
+      <div className="scanner-container">
+        <div id="pharmacy-qr-reader" />
+        {!scanning ? (
+          <button className="btn btn-primary" onClick={startScanner} style={{ marginTop: '0.5rem' }}>
+            Scan QR Code
+          </button>
+        ) : (
+          <button className="btn btn-secondary" onClick={stopScanner} style={{ marginTop: '0.5rem' }}>
+            Stop Scanner
+          </button>
         )}
-        {result?.result === 'unknown' && (
-          <div className="alert alert--flag" role="alert">
-            <strong>{strings.status.unknown}</strong>
-            <p>{result.serial || '—'}</p>
+      </div>
+
+      {/* Manual Input */}
+      <form onSubmit={handleManualSubmit} className="manual-input">
+        <input
+          type="text"
+          value={serial}
+          onChange={(e) => setSerial(e.target.value)}
+          placeholder="Or enter serial manually"
+        />
+        <button type="submit" className="btn btn-primary">Submit</button>
+      </form>
+
+      {/* Loading */}
+      {loading && <p className="loading">Processing…</p>}
+
+      {/* Error */}
+      {error && <div className="banner banner-danger" style={{ marginTop: '1rem' }}>{error}</div>}
+
+      {/* Result */}
+      {result && result.result === 'ok' && (
+        <div className="banner banner-ok" style={{ marginTop: '1rem' }}>
+          ✓ {strings.messages?.dispenseOk || 'Dispensed successfully'}
+          {result.flags && result.flags.length > 0 && (
+            <ul className="flag-list" style={{ marginTop: '0.5rem' }}>
+              {result.flags.map((flag, i) => <li key={i} className="flag-item">{flag}</li>)}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {result && result.result === 'conflict' && (
+        <div className="banner banner-danger" style={{ marginTop: '1rem' }}>
+          ⚠ {strings.status.conflict}
+          <div className="conflict-details">
+            <p>Previously dispensed by: <strong>{result.conflictWith.actorName}</strong></p>
+            <p>At: {new Date(result.conflictWith.at).toLocaleString()}</p>
           </div>
-        )}
-      </section>
-    </main>
-  );
+          {result.flags && result.flags.length > 0 && (
+            <ul className="flag-list" style={{ marginTop: '0.5rem' }}>
+              {result.flags.map((flag, i) => <li key={i} className="flag-item">{flag}</li>)}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }

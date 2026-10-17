@@ -1,72 +1,28 @@
-require('dotenv').config();
-
 const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
-const multer = require('multer');
 const Database = require('better-sqlite3');
 const path = require('path');
-
 const integrations = require('./integrations');
-const chain = integrations.chain;
-const ocr = integrations.ocr;
+const multer = require('multer');
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024, files: 1 }
+});
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json());
 
 const dbPath = process.env.DB_FILE || path.join(__dirname, '../data/demo.db');
 const db = new Database(dbPath);
-db.pragma('journal_mode = WAL');
-
-const SERIAL_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-const SERIAL_LENGTH = 16;
-
-const PACK_STATUS = {
-  REGISTERED: 'registered',
-  IN_CUSTODY: 'in_custody',
-  DISPENSED: 'dispensed'
-};
-
-function generateSerial() {
-  if (SERIAL_ALPHABET.length !== 32) {
-    throw new Error('Serial alphabet must contain exactly 32 symbols');
-  }
-  const bytes = crypto.randomBytes(SERIAL_LENGTH);
-  let serial = '';
-  for (let i = 0; i < SERIAL_LENGTH; i += 1) {
-    serial += SERIAL_ALPHABET[bytes[i] % SERIAL_ALPHABET.length];
-  }
-  return serial;
-}
-
-function generateSerialSet(count) {
-  const serials = new Set();
-  while (serials.size < count) {
-    serials.add(generateSerial());
-  }
-  return [...serials];
-}
-
-async function withChain(fn, fallback) {
-  try {
-    const result = await fn();
-    return result || fallback;
-  } catch (error) {
-    console.error('[chain] call failed:', error.message);
-    return fallback;
-  }
-}
 
 const requireAuth = (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'unauthorized', message: 'Missing or invalid token' });
   }
-  const token = authHeader.substring(7).trim();
-  if (!token) {
-    return res.status(401).json({ error: 'unauthorized', message: 'Missing or invalid token' });
-  }
+  const token = authHeader.substring(7);
   const actor = db.prepare('SELECT * FROM actors WHERE token = ?').get(token);
   if (!actor) {
     return res.status(401).json({ error: 'unauthorized', message: 'Missing or invalid token' });
@@ -75,66 +31,21 @@ const requireAuth = (req, res, next) => {
   next();
 };
 
-function requireRole(...roles) {
-  return (req, res, next) => {
-    if (!roles.includes(req.actor.role)) {
-      return res.status(403).json({ error: 'forbidden', message: 'Role not permitted for this action' });
-    }
-    next();
-  };
-}
-
-const findActorById = db.prepare('SELECT * FROM actors WHERE id = ?');
-const findActorByAddress = db.prepare('SELECT * FROM actors WHERE address = ?');
-const findPackBySerial = db.prepare('SELECT * FROM packs WHERE serial = ?');
-const findBatchById = db.prepare('SELECT * FROM batches WHERE id = ?');
-const insertBatch = db.prepare(`
-  INSERT INTO batches (productName, batchNo, expiry, quantity)
-  VALUES (@productName, @batchNo, @expiry, @quantity)
-`);
-const insertPack = db.prepare(`
-  INSERT INTO packs (serial, batchId, status, currentHolderId)
-  VALUES (@serial, @batchId, @status, @currentHolderId)
-`);
-const updatePack = db.prepare(`
-  UPDATE packs SET status = @status, currentHolderId = @currentHolderId WHERE serial = @serial
-`);
-const insertEvent = db.prepare(`
-  INSERT INTO events (packSerial, type, actorId, at, txHash, details)
-  VALUES (@packSerial, @type, @actorId, @at, @txHash, @details)
-`);
-const insertAlert = db.prepare(`
-  INSERT INTO alerts (serial, type, at, details)
-  VALUES (@serial, @type, @at, @details)
-`);
-const selectEventsForSerial = db.prepare(`
-  SELECT events.*, actors.name AS actorName, actors.place AS place
-  FROM events
-  LEFT JOIN actors ON actors.id = events.actorId
-  WHERE events.packSerial = ?
-  ORDER BY events.at ASC, events.id ASC
-`);
-
 app.post('/api/login', (req, res) => {
-  const { username } = req.body || {};
+  const { username } = req.body;
   if (!username) {
     return res.status(401).json({ error: 'unauthorized', message: 'Unknown user' });
   }
 
   const actor = db.prepare('SELECT * FROM actors WHERE username = ?').get(username);
-
+  
   if (!actor) {
     return res.status(401).json({ error: 'unauthorized', message: 'Unknown user' });
   }
 
-  const issueToken = db.transaction(() => {
-    const token = crypto.randomUUID();
-    db.prepare('UPDATE actors SET token = ? WHERE id = ?').run(token, actor.id);
-    return token;
-  });
-
-  const token = issueToken();
-
+  const token = crypto.randomUUID();
+  db.prepare('UPDATE actors SET token = ? WHERE id = ?').run(token, actor.id);
+  
   res.status(200).json({
     token,
     actor: {
@@ -146,369 +57,345 @@ app.post('/api/login', (req, res) => {
   });
 });
 
-app.post('/api/batches', requireAuth, requireRole('manufacturer'), async (req, res) => {
-  const { productName, batchNo, expiry, quantity } = req.body || {};
-  const count = Number(quantity);
+function generateSerial() {
+  const alphabet = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+  const bytes = crypto.randomBytes(16);
+  let serial = '';
+  for (let i = 0; i < 16; i++) {
+    serial += alphabet[bytes[i] % alphabet.length];
+  }
+  return serial;
+}
 
-  if (!productName || !batchNo || !expiry || !Number.isInteger(count) || count < 1) {
-    return res.status(400).json({
-      error: 'invalid_request',
-      message: 'productName, batchNo, expiry and a positive integer quantity are required'
-    });
+app.post('/api/batches', requireAuth, async (req, res) => {
+  if (req.actor.role !== 'manufacturer') {
+    return res.status(403).json({ error: 'forbidden', message: 'Only manufacturers can register batches' });
   }
 
-  const serials = generateSerialSet(count);
+  const { productName, batchNo, expiry, quantity } = req.body;
+  if (!productName || !batchNo || !expiry || !quantity) {
+    return res.status(400).json({ error: 'bad_request', message: 'Missing fields' });
+  }
+  
+  const serials = [];
+  for (let i = 0; i < quantity; i++) {
+    serials.push(generateSerial());
+  }
 
-  try {
-    const chainResult = await withChain(
-      () => chain.registerPacks(serials, { actor: req.actor.address, batchNo }),
-      { txHash: null }
-    );
+  const now = new Date().toISOString();
+  let batchId;
 
-    const createBatch = db.transaction(() => {
-      const batch = insertBatch.run({
-        productName: String(productName).trim(),
-        batchNo: String(batchNo).trim(),
-        expiry: String(expiry).trim(),
-        quantity: count
-      });
-      const batchId = batch.lastInsertRowid;
-      const at = new Date().toISOString();
+  const insertBatch = db.prepare(`INSERT INTO batches (productName, batchNo, expiry, quantity) VALUES (?, ?, ?, ?)`);
+  const insertPack = db.prepare(`INSERT INTO packs (serial, batchId, status, currentHolderId) VALUES (?, ?, ?, ?)`);
+  const insertEvent = db.prepare(`INSERT INTO events (packSerial, type, actorId, at, txHash) VALUES (?, ?, ?, ?, ?)`);
+  const updateEventTx = db.prepare(`UPDATE events SET txHash = ? WHERE packSerial = ? AND type = 'registered'`);
 
-      for (const serial of serials) {
-        insertPack.run({
-          serial,
-          batchId,
-          status: PACK_STATUS.REGISTERED,
-          currentHolderId: req.actor.id
-        });
-        insertEvent.run({
-          packSerial: serial,
-          type: 'registered',
-          actorId: req.actor.id,
-          at,
-          txHash: chainResult.txHash || null,
-          details: JSON.stringify({ batchId, batchNo, productName })
-        });
-      }
+  const registerTransaction = db.transaction(() => {
+    const info = insertBatch.run(productName, batchNo, expiry, quantity);
+    batchId = info.lastInsertRowid;
 
-      return batchId;
-    });
-
-    const batchId = createBatch();
-    res.status(201).json({ batchId, serials, txHash: chainResult.txHash || null });
-  } catch (error) {
-    if (error && error.code === 'SQLITE_CONSTRAINT_PRIMARYKEY') {
-      return res.status(409).json({ error: 'conflict', message: 'Serial collision, retry batch creation' });
+    for (const serial of serials) {
+      insertPack.run(serial, batchId, 'registered', req.actor.id);
+      insertEvent.run(serial, 'registered', req.actor.id, now, null);
     }
-    console.error('[api] batch creation failed:', error);
-    res.status(500).json({ error: 'server_error', message: 'Unable to register batch' });
-  }
-});
+  });
 
-app.post('/api/custody/transfer', requireAuth, requireRole('manufacturer', 'distributor'), async (req, res) => {
-  const { serials, toActorId } = req.body || {};
-
-  if (!Array.isArray(serials) || serials.length === 0 || !toActorId) {
-    return res.status(400).json({
-      error: 'invalid_request',
-      message: 'serials (non-empty array) and toActorId are required'
-    });
-  }
-
-  const cleanSerials = [...new Set(serials.map((item) => String(item).trim()).filter(Boolean))];
-  if (cleanSerials.length === 0) {
-    return res.status(400).json({ error: 'invalid_request', message: 'serials must contain at least one value' });
-  }
-
-  const destination = Number.isInteger(Number(toActorId))
-    ? findActorById.get(Number(toActorId))
-    : findActorByAddress.get(String(toActorId).trim());
-
-  if (!destination) {
-    return res.status(404).json({ error: 'not_found', message: 'Destination actor does not exist' });
-  }
-
-  if (destination.id === req.actor.id) {
-    return res.status(400).json({ error: 'invalid_request', message: 'Cannot transfer custody to yourself' });
-  }
-
-  const packs = cleanSerials.map((serial) => ({ serial, pack: findPackBySerial.get(serial) }));
-  const missing = packs.filter((entry) => !entry.pack).map((entry) => entry.serial);
-  if (missing.length > 0) {
-    return res.status(404).json({ error: 'not_found', message: 'Unknown serials', serials: missing });
-  }
-
-  const notHeld = packs
-    .filter((entry) => entry.pack.currentHolderId !== req.actor.id)
-    .map((entry) => entry.serial);
-  if (notHeld.length > 0) {
-    return res.status(409).json({
-      error: 'not_current_holder',
-      message: 'Actor does not currently hold these serials',
-      serials: notHeld
-    });
-  }
-
-  const alreadyDispensed = packs
-    .filter((entry) => entry.pack.status === PACK_STATUS.DISPENSED)
-    .map((entry) => entry.serial);
-  if (alreadyDispensed.length > 0) {
-    return res.status(409).json({
-      error: 'already_dispensed',
-      message: 'Dispensed serials cannot be transferred',
-      serials: alreadyDispensed
-    });
-  }
+  registerTransaction();
 
   try {
-    const chainResult = await withChain(
-      () => chain.transfer(cleanSerials, {
-        from: req.actor.address,
-        to: destination.address
-      }),
-      { txHash: null }
-    );
-
-    const transfer = db.transaction((serialsToMove) => {
-      const at = new Date().toISOString();
-      for (const serial of serialsToMove) {
-        updatePack.run({
-          serial,
-          status: PACK_STATUS.IN_CUSTODY,
-          currentHolderId: destination.id
-        });
-        insertEvent.run({
-          packSerial: serial,
-          type: 'transferred',
-          actorId: req.actor.id,
-          at,
-          txHash: chainResult.txHash || null,
-          details: JSON.stringify({ toActorId: destination.id })
-        });
-      }
-      return serialsToMove.length;
-    });
-
-    const transferred = transfer(cleanSerials);
-    res.status(200).json({ transferred, toActorId: destination.id, txHash: chainResult.txHash || null });
-  } catch (error) {
-    console.error('[api] custody transfer failed:', error);
-    res.status(500).json({ error: 'server_error', message: 'Unable to transfer custody' });
+    const { txHash } = await integrations.chain.registerPacks(batchId, serials, req.actor.address);
+    if (txHash) {
+      const updateHashTransaction = db.transaction(() => {
+        for (const serial of serials) {
+          updateEventTx.run(txHash, serial);
+        }
+      });
+      updateHashTransaction();
+    }
+  } catch (err) {
+    // Chain integration failed, but DB transaction succeeded
+    console.error('Chain integration failed:', err);
   }
+
+  res.status(201).json({ batchId, serials });
 });
 
-app.post('/api/dispense', requireAuth, requireRole('pharmacy'), async (req, res) => {
-  const { serial } = req.body || {};
-  if (!serial || typeof serial !== 'string') {
-    return res.status(400).json({ error: 'invalid_request', message: 'serial is required' });
+app.post('/api/custody/transfer', requireAuth, async (req, res) => {
+  const { serials, toActorId } = req.body;
+  if (!Array.isArray(serials) || !toActorId) {
+    return res.status(400).json({ error: 'bad_request', message: 'Missing serials or toActorId' });
   }
 
-  const cleanSerial = serial.trim();
-  const pack = findPackBySerial.get(cleanSerial);
+  const recipient = db.prepare('SELECT * FROM actors WHERE id = ?').get(toActorId);
+  if (!recipient || (recipient.role !== 'distributor' && recipient.role !== 'pharmacy')) {
+    return res.status(400).json({ error: 'bad_request', message: 'Invalid recipient' });
+  }
 
+  const getPack = db.prepare('SELECT * FROM packs WHERE serial = ?');
+  
+  for (const serial of serials) {
+    const pack = getPack.get(serial);
+    if (!pack) {
+      return res.status(404).json({ error: 'unknown_serial', message: 'Serial not found' });
+    }
+    if (pack.currentHolderId !== req.actor.id) {
+      return res.status(403).json({ error: 'forbidden', message: 'You do not hold this serial' });
+    }
+  }
+
+  const now = new Date().toISOString();
+  const updatePack = db.prepare(`UPDATE packs SET currentHolderId = ?, status = 'in_custody' WHERE serial = ?`);
+  const insertEvent = db.prepare(`INSERT INTO events (packSerial, type, actorId, at, details) VALUES (?, 'transferred', ?, ?, ?)`);
+
+  const tx = db.transaction(() => {
+    for (const serial of serials) {
+      updatePack.run(toActorId, serial);
+      insertEvent.run(serial, req.actor.id, now, JSON.stringify({ to: toActorId }));
+    }
+  });
+
+  try {
+    tx();
+  } catch (err) {
+    return res.status(500).json({ error: 'server_error', message: 'Database error' });
+  }
+
+  const txHashes = [];
+  try {
+    for (const serial of serials) {
+      const { txHash } = await integrations.chain.transfer(serial, req.actor.address, recipient.address);
+      if (txHash) {
+        txHashes.push(txHash);
+        db.prepare(`UPDATE events SET txHash = ? WHERE packSerial = ? AND type = 'transferred' AND at = ?`).run(txHash, serial, now);
+      }
+    }
+  } catch (err) {
+    console.error('Chain integration failed:', err);
+  }
+
+  return res.status(200).json({ ok: true, transferred: serials.length, txHashes });
+});
+
+app.post('/api/dispense', requireAuth, async (req, res) => {
+  if (req.actor.role !== 'pharmacy') {
+    return res.status(403).json({ error: 'forbidden', message: 'Only pharmacies can dispense' });
+  }
+
+  const { serial } = req.body;
+  if (!serial) {
+    return res.status(400).json({ error: 'bad_request', message: 'Missing serial' });
+  }
+
+  const now = new Date().toISOString();
+  const pack = db.prepare('SELECT * FROM packs WHERE serial = ?').get(serial);
+  
   if (!pack) {
-    return res.status(200).json({
-      serial: cleanSerial,
-      result: 'unknown',
-      status: 'unknown'
-    });
+    db.prepare(`INSERT INTO alerts (serial, type, at) VALUES (?, 'unknown_serial', ?)`).run(serial, now);
+    return res.status(404).json({ error: 'unknown_serial', message: 'No registered record found' });
   }
 
-  if (pack.status === PACK_STATUS.DISPENSED) {
-    const trail = selectEventsForSerial.all(cleanSerial);
-    const priorDispense = [...trail].reverse().find((event) => event.type === 'dispensed');
-    const priorHolder = findActorById.get(priorDispense ? priorDispense.actorId : pack.currentHolderId);
+  const flags = [];
+  if (pack.currentHolderId !== req.actor.id) {
+    flags.push("No custody record before dispensing");
+  }
 
-    const recordConflict = db.transaction(() => {
-      insertAlert.run({
-        serial: cleanSerial,
-        type: 'double_dispense',
-        at: new Date().toISOString(),
-        details: JSON.stringify({
-          attemptedBy: req.actor.id,
-          previouslyDispensedBy: priorDispense ? priorDispense.actorId : null,
-          at: priorDispense ? priorDispense.at : null
-        })
-      });
+  const dispensedEvent = db.prepare(`SELECT * FROM events WHERE packSerial = ? AND type = 'dispensed'`).get(serial);
+
+  if (dispensedEvent) {
+    const conflictTx = db.transaction(() => {
+      db.prepare(`INSERT INTO events (packSerial, type, actorId, at) VALUES (?, 'conflict', ?, ?)`).run(serial, req.actor.id, now);
+      db.prepare(`INSERT INTO alerts (serial, type, at) VALUES (?, 'double_dispense', ?)`).run(serial, now);
     });
-    recordConflict();
-
+    conflictTx();
+    
+    const firstActor = db.prepare(`SELECT name FROM actors WHERE id = ?`).get(dispensedEvent.actorId);
+    
+    let txHash = null;
+    try {
+      const result = await integrations.chain.dispense(serial, req.actor.address);
+      txHash = result.txHash;
+      if (txHash) {
+         db.prepare(`UPDATE events SET txHash = ? WHERE packSerial = ? AND type = 'conflict' AND at = ?`).run(txHash, serial, now);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    
     return res.status(200).json({
-      serial: cleanSerial,
       result: 'conflict',
-      status: PACK_STATUS.DISPENSED,
+      txHash,
+      flags,
       conflictWith: {
-        actorId: priorHolder ? priorHolder.id : null,
-        actorName: priorHolder ? priorHolder.name : null,
-        at: priorDispense ? priorDispense.at : null
+        actorName: firstActor ? firstActor.name : 'Unknown',
+        at: dispensedEvent.at
       }
     });
   }
 
-  if (pack.currentHolderId !== req.actor.id) {
-    return res.status(409).json({
-      error: 'not_current_holder',
-      message: 'Serial is not in this pharmacy’s custody',
-      serial: cleanSerial
-    });
-  }
-
+  const okTx = db.transaction(() => {
+    db.prepare(`UPDATE packs SET status = 'dispensed' WHERE serial = ?`).run(serial);
+    db.prepare(`INSERT INTO events (packSerial, type, actorId, at) VALUES (?, 'dispensed', ?, ?)`).run(serial, req.actor.id, now);
+  });
+  okTx();
+  
+  let txHash = null;
   try {
-    const chainResult = await withChain(
-      () => chain.dispense([cleanSerial], { actor: req.actor.address }),
-      { txHash: null }
-    );
-
-    const dispense = db.transaction(() => {
-      const at = new Date().toISOString();
-      updatePack.run({
-        serial: cleanSerial,
-        status: PACK_STATUS.DISPENSED,
-        currentHolderId: req.actor.id
-      });
-      insertEvent.run({
-        packSerial: cleanSerial,
-        type: 'dispensed',
-        actorId: req.actor.id,
-        at,
-        txHash: chainResult.txHash || null,
-        details: JSON.stringify({ batchId: pack.batchId })
-      });
-      return at;
-    });
-
-    const at = dispense();
-    res.status(200).json({ serial: cleanSerial, result: 'ok', status: PACK_STATUS.DISPENSED, at });
-  } catch (error) {
-    console.error('[api] dispense failed:', error);
-    res.status(500).json({ error: 'server_error', message: 'Unable to record dispensing' });
+    const result = await integrations.chain.dispense(serial, req.actor.address);
+    txHash = result.txHash;
+    if (txHash) {
+      db.prepare(`UPDATE events SET txHash = ? WHERE packSerial = ? AND type = 'dispensed' AND at = ?`).run(txHash, serial, now);
+    }
+  } catch (err) {
+    console.error(err);
   }
-});
 
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 8 * 1024 * 1024, files: 1 }
+  return res.status(200).json({ result: 'ok', txHash, flags });
 });
 
 app.get('/api/verify/:serial', (req, res) => {
-  const serial = String(req.params.serial || '').trim();
-  const pack = findPackBySerial.get(serial);
+  const { serial } = req.params;
+  const pack = db.prepare('SELECT * FROM packs WHERE serial = ?').get(serial);
 
   if (!pack) {
-    return res.status(200).json({
-      serial,
-      status: 'unknown',
-      product: null,
-      currentHolder: null,
-      trail: [],
-      flags: []
+    return res.status(200).json({ 
+      serial, 
+      status: "unknown", 
+      product: null, 
+      currentHolder: null, 
+      trail: [], 
+      flags: [] 
     });
   }
 
-  const batch = findBatchById.get(pack.batchId);
-  const holder = findActorById.get(pack.currentHolderId);
-  const trail = selectEventsForSerial.all(serial);
-  const alerts = db.prepare('SELECT * FROM alerts WHERE serial = ? ORDER BY at DESC, id DESC').all(serial);
+  const batch = db.prepare('SELECT * FROM batches WHERE id = ?').get(pack.batchId);
+  const holder = db.prepare('SELECT name, place FROM actors WHERE id = ?').get(pack.currentHolderId);
+  
+  const events = db.prepare(`
+    SELECT e.type, e.at, e.txHash, a.name as actorName, a.place 
+    FROM events e 
+    LEFT JOIN actors a ON e.actorId = a.id 
+    WHERE e.packSerial = ? 
+    ORDER BY e.at ASC
+  `).all(serial);
 
-  const flags = alerts.map((alert) => ({
-    type: alert.type,
-    at: alert.at,
-    message: 'This serial has a record that needs review.'
+  const trail = events.map(e => ({ 
+    type: e.type, 
+    actorName: e.actorName, 
+    place: e.place, 
+    at: e.at, 
+    txHash: e.txHash 
   }));
 
-  res.status(200).json({
+  const alerts = db.prepare('SELECT * FROM alerts WHERE serial = ?').all(serial);
+  
+  const flags = [];
+  if (alerts.some(a => a.type === 'ocr_mismatch')) {
+    flags.push("Pack photo did not match the registered record");
+  }
+  
+  let derivedStatus = 'unknown';
+  if (alerts.some(a => a.type === 'double_dispense')) {
+    derivedStatus = 'conflict';
+  } else if (pack.status === 'dispensed') {
+    derivedStatus = 'dispensed';
+  } else if (pack.status === 'in_custody') {
+    derivedStatus = 'in_custody';
+  } else if (pack.status === 'registered') {
+    derivedStatus = 'registered';
+  }
+
+  return res.status(200).json({
     serial,
-    status: pack.status,
-    product: batch
-      ? {
-          productName: batch.productName,
-          batchNo: batch.batchNo,
-          expiry: batch.expiry,
-          quantity: batch.quantity
-        }
-      : null,
-    currentHolder: holder
-      ? { id: holder.id, name: holder.name, role: holder.role, place: holder.place }
-      : null,
-    trail: trail.map((event) => ({
-      type: event.type,
-      actorName: event.actorName ?? null,
-      place: event.place ?? null,
-      at: event.at,
-      txHash: event.txHash ?? null
-    })),
+    status: derivedStatus,
+    product: batch ? {
+      productName: batch.productName,
+      batchNo: batch.batchNo,
+      expiry: batch.expiry
+    } : null,
+    currentHolder: holder ? {
+      name: holder.name,
+      place: holder.place
+    } : null,
+    trail,
     flags
   });
 });
 
 app.post('/api/verify/ocr', upload.single('image'), async (req, res) => {
-  const serial = String(req.body?.serial || '').trim();
+  const { serial } = req.body;
+
   if (!req.file) {
-    return res.status(400).json({ error: 'invalid_request', message: 'An image file is required' });
-  }
-  if (!serial) {
-    return res.status(400).json({ error: 'invalid_request', message: 'serial is required' });
+    return res.status(400).json({ error: 'bad_request', message: 'An image file is required' });
   }
 
-  const pack = findPackBySerial.get(serial);
+  const pack = db.prepare('SELECT * FROM packs WHERE serial = ?').get(serial);
   if (!pack) {
-    return res.status(200).json({ serial, match: 'unreadable', differences: [] });
+    return res.status(404).json({ error: 'unknown_serial', message: 'No registered record found' });
   }
 
-  const batch = findBatchById.get(pack.batchId);
+  const batch = db.prepare('SELECT * FROM batches WHERE id = ?').get(pack.batchId);
 
+  let fields;
   try {
-    const extracted = await ocr.extractPackFields(req.file.buffer, 'image/*');
-    const comparison = await ocr.comparePack(extracted, {
-      productName: batch ? batch.productName : null,
-      batchNo: batch ? batch.batchNo : null,
-      expiry: batch ? batch.expiry : null
-    });
-    const match = String(comparison?.match || 'unreadable');
-    res.status(200).json({
-      serial,
-      match: ['match', 'mismatch', 'unreadable'].includes(match) ? match : 'unreadable',
-      differences: Array.isArray(comparison?.differences) ? comparison.differences : []
-    });
-  } catch (error) {
-    console.error('[api] ocr verification failed:', error);
-    res.status(200).json({ serial, match: 'unreadable', differences: [] });
+    fields = await integrations.ocr.extractPackFields(req.file.buffer, req.file.mimetype);
+  } catch (err) {
+    console.error('OCR integration failed:', err);
+    return res.status(502).json({ error: 'ocr_unavailable', message: 'Image check is unavailable. Please try again.' });
   }
+
+  let comparison;
+  try {
+    comparison = await integrations.ocr.comparePack(fields, batch);
+  } catch (err) {
+    console.error('OCR comparison failed:', err);
+    return res.status(502).json({ error: 'ocr_unavailable', message: 'Image check is unavailable. Please try again.' });
+  }
+
+  const { match, differences } = comparison;
+
+  if (match === 'mismatch') {
+    try {
+      db.prepare(`INSERT INTO alerts (serial, type, at) VALUES (?, 'ocr_mismatch', ?)`).run(serial, new Date().toISOString());
+    } catch (err) {
+      console.error('Failed to record OCR mismatch alert:', err);
+    }
+  }
+
+  return res.status(200).json({
+    extracted: fields,
+    confidence: fields.confidence,
+    match,
+    differences
+  });
 });
 
-app.get('/api/alerts', requireAuth, requireRole('regulator'), (req, res) => {
-  const limit = Math.min(Number(req.query.limit) || 100, 500);
+app.get('/api/alerts', requireAuth, (req, res) => {
+  if (req.actor.role !== 'regulator') {
+    return res.status(403).json({ error: 'forbidden', message: 'Only regulators can view alerts' });
+  }
+
+  const limit = Math.min(Number(req.query.limit) || 200, 1000);
   const alerts = db.prepare(`
-    SELECT * FROM alerts ORDER BY at DESC, id DESC LIMIT ?
+    SELECT id, serial, type, at, details FROM alerts
+    ORDER BY at DESC, id DESC
+    LIMIT ?
   `).all(limit);
 
-  res.status(200).json({ alerts });
+  return res.status(200).json(alerts);
 });
 
-app.use((error, req, res, next) => {
-  if (error instanceof multer.MulterError) {
-    return res.status(400).json({ error: 'invalid_request', message: error.message });
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    const message = err.code === 'LIMIT_FILE_SIZE'
+      ? 'Image is too large. Please upload a file under 8 MB.'
+      : err.message;
+    return res.status(400).json({ error: 'bad_request', message });
   }
-  console.error('[api] unhandled error:', error);
-  res.status(500).json({ error: 'server_error', message: 'Unexpected server error' });
+  console.error('Unhandled server error:', err);
+  return res.status(500).json({ error: 'server_error', message: 'Unexpected server error' });
 });
 
-const PORT = process.env.PORT || 3000;
-const server = app.listen(PORT, () => {
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });
-
-function shutdown() {
-  server.close(() => {
-    try { db.close(); } catch { /* already closed */ }
-    process.exit(0);
-  });
-}
-
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
-
-module.exports = app;
-module.exports.db = db;
-module.exports.generateSerial = generateSerial;

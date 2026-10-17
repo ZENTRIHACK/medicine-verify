@@ -1,164 +1,142 @@
-const TOKEN_KEY = 'trustlayer.token';
+// All network access goes through here.
+// VITE_USE_MOCKS=true  -> local fixtures (src/mocks)
+// VITE_USE_MOCKS=false -> relative /api/... calls (proxied to Part B by Vite)
+import { mockApi } from './mocks/index.js';
 
-const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === 'true';
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
+export const USE_MOCKS = import.meta.env.VITE_USE_MOCKS !== 'false';
 
-function readToken() {
+const TOKEN_KEY = 'zentriq_token';
+const ACTOR_KEY = 'zentriq_actor';
+
+export function getToken() {
   try {
-    return window.localStorage.getItem(TOKEN_KEY);
+    return localStorage.getItem(TOKEN_KEY);
   } catch {
     return null;
   }
 }
 
-export function getToken() {
-  return readToken();
-}
-
-export function setToken(token) {
+export function getStoredActor() {
   try {
-    if (token) window.localStorage.setItem(TOKEN_KEY, token);
-    else window.localStorage.removeItem(TOKEN_KEY);
+    const raw = localStorage.getItem(ACTOR_KEY);
+    return raw && getToken() ? JSON.parse(raw) : null;
   } catch {
-    /* storage unavailable; token stays in memory for this session only */
+    return null;
   }
-  return token;
 }
 
-export function clearToken() {
+function storeSession(token, actor) {
   try {
-    window.localStorage.removeItem(TOKEN_KEY);
+    localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(ACTOR_KEY, JSON.stringify(actor));
   } catch {
-    /* ignore */
+    /* storage unavailable: session lasts until reload */
   }
 }
 
-export class ApiError extends Error {
-  constructor(message, status, payload) {
-    super(message);
-    this.name = 'ApiError';
-    this.status = status;
-    this.payload = payload;
+export function clearSession() {
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(ACTOR_KEY);
+  } catch {
+    /* nothing to clear */
   }
 }
 
-async function request(path, { method = 'GET', body, auth = true, headers = {} } = {}) {
-  const finalHeaders = { ...headers };
+async function request(path, { method = 'GET', body, form } = {}) {
+  const headers = {};
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
 
-  if (auth) {
-    const token = readToken();
-    if (!token) throw new ApiError('You are not signed in.', 401);
-    finalHeaders.Authorization = `Bearer ${token}`;
+  let payload;
+  if (form) {
+    payload = form; // browser sets the multipart boundary
+  } else if (body !== undefined) {
+    headers['Content-Type'] = 'application/json';
+    payload = JSON.stringify(body);
   }
 
-  let payload = body;
-  if (payload !== undefined && !(payload instanceof FormData)) {
-    finalHeaders['Content-Type'] = 'application/json';
-    payload = JSON.stringify(payload);
-  }
-
-  const response = await fetch(`${API_BASE}${path}`, { method, headers: finalHeaders, body: payload });
-
-  const text = await response.text();
+  const res = await fetch(path, { method, headers, body: payload });
+  const text = await res.text();
   let data = null;
-  if (text) {
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = text;
-    }
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = null;
   }
 
-  if (!response.ok) {
-    const message = (data && (data.message || data.error)) || `Request failed with status ${response.status}`;
-    throw new ApiError(message, response.status, data);
+  if (!res.ok) {
+    // A dispense conflict may arrive with an error status; it is still a result.
+    if (data && data.result === 'conflict') return data;
+    throw Object.assign(new Error(`Request failed (${res.status})`), { status: res.status });
   }
-
-  return data === null ? {} : data;
+  return data;
 }
 
-/* ------------------------------ mock mode ------------------------------ */
-
-const MOCK_SERIALS = ['3F7K2Q9WM4XB8TDA', '8H2N5PRVJ6YC1MZK', 'K4T9WQZ7B2NH6XSD'];
-
-function mockLogin(username) {
-  const known = { zenocare: 'manufacturer', afyalink: 'distributor', mlimani: 'pharmacy', regulator: 'regulator' };
-  return {
-    token: `mock-token-${username}`,
-    actor: { id: 1, role: known[username] || 'manufacturer', name: `${username} (mock)`, place: 'Nairobi' }
-  };
-}
-
-function mockHex(bytes = 16) {
-  const buf = new Uint8Array(bytes);
-  window.crypto.getRandomValues(buf);
-  return Array.from(buf, (b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-function mockRegisterBatch({ quantity = 1 }) {
-  const serials = Array.from({ length: Number(quantity) || 1 }, (_, index) => `MOCK${String(index + 1).padStart(4, '0')}`);
-  return { batchId: Date.now(), serials, txHash: `0xmock${mockHex()}` };
-}
-
-/* ------------------------------ api surface ------------------------------ */
+const ctx = () => ({ token: getToken() });
 
 export const api = {
   async login(username) {
-    if (USE_MOCKS) return mockLogin(username);
-    return request('/login', { method: 'POST', body: { username }, auth: false });
+    const res = USE_MOCKS
+      ? await mockApi.login({ username })
+      : await request('/api/login', { method: 'POST', body: { username } });
+    storeSession(res.token, res.actor);
+    return res;
   },
 
-  async registerBatch(batch) {
-    if (USE_MOCKS) return mockRegisterBatch(batch);
-    return request('/batches', { method: 'POST', body: batch });
+  createBatch({ productName, batchNo, expiry, quantity }) {
+    const body = { productName, batchNo, expiry, quantity };
+    return USE_MOCKS ? mockApi.createBatch(body, ctx()) : request('/api/batches', { method: 'POST', body });
   },
 
-  async transferCustody(serials, toActorId) {
-    if (USE_MOCKS) return { transferred: serials.length, toActorId: Number(toActorId) };
-    return request('/custody/transfer', { method: 'POST', body: { serials, toActorId } });
+  transfer({ serials, toActorId }) {
+    const body = { serials, toActorId };
+    return USE_MOCKS ? mockApi.transfer(body, ctx()) : request('/api/custody/transfer', { method: 'POST', body });
   },
 
-  async dispense(serial) {
-    if (USE_MOCKS) {
-      return MOCK_SERIALS.includes(serial)
-        ? { serial, result: 'ok', status: 'dispensed', at: new Date().toISOString() }
-        : { serial, result: 'conflict', status: 'dispensed', conflictWith: { actorName: 'Another pharmacy', at: new Date().toISOString() } };
-    }
-    return request('/dispense', { method: 'POST', body: { serial } });
+  dispense(serial) {
+    const body = { serial };
+    return USE_MOCKS ? mockApi.dispense(body, ctx()) : request('/api/dispense', { method: 'POST', body });
   },
 
-  async verifySerial(serial) {
-    if (USE_MOCKS) {
-      return {
-        serial,
-        status: MOCK_SERIALS.includes(serial) ? 'in_custody' : 'unknown',
-        product: MOCK_SERIALS.includes(serial)
-          ? { productName: 'Amoxicillin 500mg', batchNo: 'BATCH-2026-001', expiry: '2027-06-30', quantity: 100 }
-          : null,
-        currentHolder: MOCK_SERIALS.includes(serial)
-          ? { id: 2, name: 'AfyaLink Distributors (demo)', role: 'distributor', place: 'Nairobi' }
-          : null,
-        trail: MOCK_SERIALS.includes(serial)
-          ? [{ type: 'registered', actorName: 'Zenocare Labs (demo)', place: 'Nairobi', at: '2026-01-05T08:00:00.000Z' }]
-          : [],
-        flags: []
-      };
-    }
-    return request(`/verify/${encodeURIComponent(serial)}`, { auth: false });
+  verify(serial) {
+    return USE_MOCKS ? mockApi.verify(serial) : request(`/api/verify/${encodeURIComponent(serial)}`);
   },
 
-  async verifyOcr(file, serial) {
+  // mockOutcome is only read in mock mode (the mock cannot read the image).
+  ocr(serial, image, mockOutcome) {
+    if (USE_MOCKS) return mockApi.ocr(serial, image, mockOutcome);
     const form = new FormData();
-    form.append('image', file);
-    if (serial) form.append('serial', serial);
-    if (USE_MOCKS) return { match: 'unreadable', differences: [] };
-    return request('/verify/ocr', { method: 'POST', body: form, auth: false });
+    form.append('serial', serial);
+    form.append('image', image);
+    return request('/api/verify/ocr', { method: 'POST', form });
   },
 
-  async getAlerts() {
-    if (USE_MOCKS) return { alerts: [] };
-    return request('/alerts');
+  alerts() {
+    return USE_MOCKS ? mockApi.alerts() : request('/api/alerts');
+  },
+
+  // Aliases kept so components written against the Part C API surface in
+  // web/src/components and web/src/pages resolve to the single canonical
+  // implementation above. The endpoint path, transport and mock routing are
+  // identical; only the name differs.
+  registerBatch(payload) {
+    return api.createBatch(payload);
+  },
+
+  transferCustody(serials, toActorId) {
+    return api.transfer({ serials, toActorId });
+  },
+
+  verifySerial(serial) {
+    return api.verify(serial);
+  },
+
+  verifyOcr(file, serial) {
+    return api.ocr(serial, file);
+  },
+
+  getAlerts() {
+    return api.alerts();
   }
 };
-
-export default api;

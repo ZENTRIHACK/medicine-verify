@@ -1,37 +1,111 @@
-// chain/wrapper.js — interface contract placeholder
-// Replace this file when the real blockchain integration is ready.
-// Until then, CHAIN_MODE=real will validate call shapes and throw.
+﻿const { ethers } = require("ethers");
+const fs = require("fs");
+const path = require("path");
 
-function assertArrayOfStrings(arg, name) {
-  if (!Array.isArray(arg) || arg.some((v) => typeof v !== 'string'))
-    throw new TypeError(`${name} must be a non-empty string array`);
+const RPC_URL = process.env.RPC_URL || "http://127.0.0.1:8545";
+const DEPLOYMENTS_PATH = path.join(__dirname, "..", "deployments.json");
+
+function loadContract() {
+  if (!fs.existsSync(DEPLOYMENTS_PATH)) {
+    throw new Error(
+      `Deployments file not found: ${DEPLOYMENTS_PATH}. Run deploy.js first.`
+    );
+  }
+
+  const deployments = JSON.parse(
+    fs.readFileSync(DEPLOYMENTS_PATH, "utf8")
+  );
+
+  const deployment = deployments.localhost;
+
+  if (!deployment?.address || !deployment?.abi) {
+    throw new Error("No localhost contract deployment found.");
+  }
+
+  return deployment;
 }
 
-const addActor = async (actorData) => {
-  throw new Error('[chain/wrapper] addActor not implemented');
-};
+async function getContract() {
+  const deployment = loadContract();
+  const provider = new ethers.JsonRpcProvider(RPC_URL);
+  const signer = await provider.getSigner();
 
-const registerPacks = async (serials, opts) => {
-  assertArrayOfStrings(serials, 'serials');
-  if (!opts?.actor || !opts?.batchNo) throw new TypeError('registerPacks requires { actor, batchNo }');
-  throw new Error('[chain/wrapper] registerPacks not implemented');
-};
+  return new ethers.Contract(
+    deployment.address,
+    deployment.abi,
+    signer
+  );
+}
 
-const transfer = async (serials, opts) => {
-  assertArrayOfStrings(serials, 'serials');
-  if (!opts?.from || !opts?.to) throw new TypeError('transfer requires { from, to }');
-  throw new Error('[chain/wrapper] transfer not implemented');
-};
+// Convert a readable medicine pack ID to bytes32.
+function serialHash(serialId) {
+  return ethers.id(serialId);
+}
 
-const dispense = async (serials, opts) => {
-  assertArrayOfStrings(serials, 'serials');
-  if (!opts?.actor) throw new TypeError('dispense requires { actor }');
-  throw new Error('[chain/wrapper] dispense not implemented');
-};
+async function registerPacks(batchId, packIds, manufacturer) {
+  const contract = await getContract();
 
-const getPack = async (serial) => {
-  if (typeof serial !== 'string') throw new TypeError('getPack requires a serial string');
-  throw new Error('[chain/wrapper] getPack not implemented');
-};
+  const hashes = packIds.map(serialHash);
+  const tx = await contract.registerPacks(
+    batchId,
+    hashes,
+    manufacturer
+  );
 
-module.exports = { addActor, registerPacks, transfer, dispense, getPack };
+  const receipt = await tx.wait();
+
+  return {
+    txHash: receipt.hash,
+    serialHashes: hashes
+  };
+}
+
+async function transfer(packId, from, to) {
+  const contract = await getContract();
+
+  const tx = await contract.transfer(
+    serialHash(packId),
+    from,
+    to
+  );
+
+  const receipt = await tx.wait();
+
+  return { txHash: receipt.hash };
+}
+
+async function dispense(packId, pharmacy) {
+  const contract = await getContract();
+  const hash = serialHash(packId);
+
+  // Preview the result, then submit the transaction so its event is recorded.
+  const result = await contract.dispense.staticCall(hash, pharmacy);
+
+  const tx = await contract.dispense(hash, pharmacy);
+  const receipt = await tx.wait();
+
+  return {
+    result,
+    txHash: receipt.hash
+  };
+}
+
+async function getPack(packId) {
+  const contract = await getContract();
+
+  const pack = await contract.getPack(serialHash(packId));
+
+  return {
+    registered: pack[0],
+    holder: pack[1],
+    dispensedBy: pack[2],
+    dispensedAt: pack[3].toString()
+  };
+}
+
+module.exports = {
+  registerPacks,
+  transfer,
+  dispense,
+  getPack
+};
