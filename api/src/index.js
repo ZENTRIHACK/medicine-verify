@@ -408,5 +408,7 @@ app.listen(PORT, () => {
 });
 
 console.log(
-  `OCR implementation: ${ocrMode ? 'REAL TESSERACT' : 'STUB'}`
+  `OCR implementation: ${
+    process.env.OCR_MODE === "real" ? "REAL TESSERACT" : "STUB"
+  }`
 );
