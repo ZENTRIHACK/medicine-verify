@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import Layout from "./components/Layout";
 import Home from "./pages/Home";
 import ScanMedicine from "./pages/ScanMedicine";
+import VerificationResult from "./pages/VerificationResult";
 
 function Placeholder({ title }) {
   return (
@@ -45,6 +46,10 @@ export default function App() {
         <Route
         path="scan"
         element={<ScanMedicine />}
+        />
+        <Route
+        path="results"
+        element={<VerificationResult />}
         />
 
         <Route path="*" element={<Navigate to="/" replace />} />
