@@ -6,16 +6,23 @@ RUN apk add --no-cache --virtual .build-deps python3 make g++
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+COPY api/package.json api/package-lock.json ./api/
+RUN cd api && npm ci --omit=dev
+
+COPY ocr/package.json ocr/package-lock.json ./ocr/
+RUN cd ocr && npm ci --omit=dev
+
 RUN apk del .build-deps
 
-COPY src ./src
-COPY scripts ./scripts
+COPY api/src ./api/src
+COPY api/scripts ./api/scripts
+COPY ocr ./ocr
 
-# Mount target for the Fly volume (mounted root-owned at runtime).
+# Mount target for the persistent volume (mounted root-owned at runtime).
 RUN mkdir -p /data && chmod 775 /data
 
+# Set OCR_MODE=real and OCR_API_KEY to use the Part D module shipped above.
+# chain/ is not shipped in this image, so CHAIN_MODE must stay stub.
 ENV NODE_ENV=production \
     PORT=3001 \
     DB_FILE=/data/prod.db \
@@ -26,4 +33,4 @@ EXPOSE 3001
 
 # Runs as root (Fly's default) so the root-owned volume at /data stays writable.
 # If you switch to USER node, chown /data in an entrypoint or SQLite writes fail.
-CMD ["node", "src/index.js"]
+CMD ["node", "api/src/index.js"]
