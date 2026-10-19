@@ -5,6 +5,10 @@ import { mockApi } from './mocks/index.js';
 
 export const USE_MOCKS = import.meta.env.VITE_USE_MOCKS !== 'false';
 
+// Absolute origin of the deployed API (Vercel -> Fly). Empty when unset so
+// local dev keeps relative /api/... paths and the Vite proxy still works.
+const BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+
 const TOKEN_KEY = 'zentriq_token';
 const ACTOR_KEY = 'zentriq_actor';
 
@@ -56,7 +60,7 @@ async function request(path, { method = 'GET', body, form } = {}) {
     payload = JSON.stringify(body);
   }
 
-  const res = await fetch(path, { method, headers, body: payload });
+  const res = await fetch(`${BASE_URL}${path}`, { method, headers, body: payload });
   const text = await res.text();
   let data = null;
   try {
