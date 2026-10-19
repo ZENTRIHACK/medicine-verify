@@ -2,8 +2,10 @@ const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
 const Database = require('better-sqlite3');
+const fs = require('fs');
 const path = require('path');
 const integrations = require('./integrations');
+const { ensureInitialized } = require('./schema');
 const multer = require('multer');
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -15,7 +17,12 @@ app.use(cors());
 app.use(express.json());
 
 const dbPath = process.env.DB_FILE || path.join(__dirname, '../data/demo.db');
+fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 const db = new Database(dbPath);
+
+if (ensureInitialized(db)) {
+  console.log(`Fresh database initialized with schema and demo actors at ${dbPath}`);
+}
 
 const requireAuth = (req, res, next) => {
   const authHeader = req.headers.authorization;
