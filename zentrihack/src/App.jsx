@@ -2,6 +2,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import Layout from "./components/Layout";
 import Home from "./pages/Home";
+import ScanMedicine from "./pages/ScanMedicine";
 
 function Placeholder({ title }) {
   return (
@@ -22,11 +23,6 @@ export default function App() {
         <Route index element={<Home />} />
 
         <Route
-          path="scan"
-          element={<Placeholder title="Scan Medicine" />}
-        />
-
-        <Route
           path="history"
           element={<Placeholder title="Scan History" />}
         />
@@ -44,6 +40,11 @@ export default function App() {
         <Route
           path="settings"
           element={<Placeholder title="Settings" />}
+        />
+
+        <Route
+        path="scan"
+        element={<ScanMedicine />}
         />
 
         <Route path="*" element={<Navigate to="/" replace />} />
