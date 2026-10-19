@@ -1,12 +1,10 @@
+
+.git
 **/node_modules
 **/data
+**/.env
+.env
 **/*.db
 **/*.db-journal
 **/*.db-wal
 **/*.db-shm
-**/.env
-.git
-web
-chain
-demo
-*.deb
