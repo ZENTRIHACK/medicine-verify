@@ -2,12 +2,12 @@ app = "medicine-verify-api"
 primary_region = "jnb"
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = "api/Dockerfile"
 
 [env]
   PORT = "3001"
   DB_FILE = "/data/prod.db"
-  # chain/ and ocr/ are not shipped in this image; "real" would crash at require time.
+  # chain/ is not shipped in this image, so "real" would crash at require time.
   CHAIN_MODE = "stub"
   OCR_MODE = "stub"
 
