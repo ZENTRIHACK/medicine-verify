@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM node:22-alpine
 
 # better-sqlite3 has no guaranteed musl prebuild, so node-gyp compiles it from
 # source. The toolchain is only needed during npm ci, then it is removed.
