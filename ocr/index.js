@@ -99,13 +99,19 @@ async function extractPackFields(imageBuffer, mimeType) {
     const { GoogleGenAI } = await import("@google/genai");
     const ai = new GoogleGenAI({ apiKey: process.env.OCR_API_KEY });
     const prompt = [
-      "Read the visible text on this medicine package.",
+      "You are a medicine-package image screening and text extraction system.",
+      "First determine whether the image visibly contains a medicine product or its pharmaceutical packaging.",
+      "Do not assume that every image contains medicine.",
+      "If the image contains food, a person, a vehicle, scenery, an unrelated object, or no identifiable medicine packaging, set isMedicinePackage to false.",
+      "If the image is ambiguous, blurry, obscured, or cannot be classified reliably, set isMedicinePackage to false.",
+      "Only when a medicine product or its packaging is visibly identifiable, set isMedicinePackage to true.",
+      "Extract only text that is actually visible. Never invent batch numbers, expiry dates, or manufacturers.",
       "Return ONLY a JSON object with exactly these fields:",
-      '{"batchNo": string|null, "expiry": string|null, "manufacturer": string|null, "confidence": number}.',
-      "Do not guess missing or blurry fields; use null.",
-      "confidence must be a number from 0 to 1 representing confidence in reading the batch number and expiry.",
-      "If an expiry date is visible, normalize it to YYYY-MM-DD when day is known, otherwise YYYY-MM.",
-      "Do not infer whether the medicine is genuine, safe, counterfeit, or effective."
+      '{"isMedicinePackage": boolean, "batchNo": string|null, "expiry": string|null, "manufacturer": string|null, "confidence": number}.',
+      "confidence must represent confidence in reading the batch number and expiry, not confidence that the medicine is genuine.",
+      "If isMedicinePackage is false, set batchNo, expiry, and manufacturer to null and confidence to 0.",
+      "If a field is missing or unreadable, return null for that field.",
+      "Do not claim that a medicine is genuine, safe, counterfeit, or effective."
     ].join(" ");
 
     const response = await ai.models.generateContent({
