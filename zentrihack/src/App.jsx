@@ -5,6 +5,7 @@ import Home from "./pages/Home";
 import ScanMedicine from "./pages/ScanMedicine";
 import VerificationResult from "./pages/VerificationResult";
 import MedicineDetails from "./pages/MedicineDetails";
+import ScanHistory from "./pages/ScanHistory";
 
 function Placeholder({ title }) {
   return (
@@ -26,7 +27,7 @@ export default function App() {
 
         <Route
           path="history"
-          element={<Placeholder title="Scan History" />}
+          element={< ScanHistory />}
         />
 
         <Route

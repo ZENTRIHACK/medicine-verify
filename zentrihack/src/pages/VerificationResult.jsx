@@ -1,10 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   ArrowRight,
   CheckCircle2,
   CircleAlert,
-  Clock,
   FileSearch,
   History,
   ScanLine,
@@ -12,6 +11,7 @@ import {
   ShieldCheck,
   TriangleAlert,
 } from "lucide-react";
+import { saveScan } from "../utils/scanStorage";
 
 const demoRecords = {
   match: {
@@ -84,24 +84,58 @@ export default function VerificationResult() {
   const demoType = searchParams.get("demo") || "match";
   const record = demoRecords[demoType] || demoRecords.match;
 
-  // Demo-only state. A real used/dispensed status must come from the API.
+  // Stable ID for each demonstration scenario.
+  // The real scanning flow will generate a unique ID for each scan.
+  const scanId = searchParams.get("scanId") || `demo-${demoType}`;
+
   const [codeStatus, setCodeStatus] = useState(
-    searchParams.get("used") === "true" ? "dispensed" : record.codeStatus
+    searchParams.get("used") === "true"
+      ? "dispensed"
+      : record.codeStatus
   );
 
   const result = outcomes[record.outcome];
   const ResultIcon = result.icon;
 
+  useEffect(() => {
+    const saved = saveScan({
+      id: scanId,
+      product: record.product,
+      batchNo: record.batchNo,
+      uniqueCode: record.uniqueCode,
+      expiry: record.expiry,
+      manufacturer: record.manufacturer,
+      distributor: record.distributor,
+      pharmacy: record.pharmacy,
+      status: record.outcome,
+      codeStatus,
+      differences: record.differences,
+      events: [],
+      demo: true,
+    });
+
+    if (!saved) {
+      console.error("MediScan could not save this result locally.");
+    }
+  }, [scanId, record, codeStatus]);
+
   function changeDemoStatus(value) {
     setCodeStatus(value);
+
     setSearchParams({
       demo: demoType,
+      scanId,
       used: value === "dispensed" ? "true" : "false",
     });
   }
 
   const hasConcern =
     record.outcome !== "match" || codeStatus === "dispensed";
+
+  const detailsUrl =
+    `/medicine-details?id=${encodeURIComponent(scanId)}` +
+    `&demo=${encodeURIComponent(demoType)}` +
+    `&used=${codeStatus === "dispensed"}`;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-9">
@@ -128,8 +162,8 @@ export default function VerificationResult() {
       </header>
 
       <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
-        <strong>DEMO PREVIEW.</strong> The information on this screen is
-        fictional and has not been checked against a live registry.
+        <strong>DEMO PREVIEW.</strong> This result uses fictional sample data.
+        It has not been checked against a live registry.
       </div>
 
       {/* Main verification outcome */}
@@ -161,15 +195,15 @@ export default function VerificationResult() {
             <CircleAlert size={20} className="mt-0.5 shrink-0" />
 
             <p>
-              Do not rely on this demonstration result to decide whether to use
-              a medicine. Seek help from a qualified pharmacist or healthcare
-              professional if you have concerns.
+              Do not rely on this demonstration result to decide whether to
+              use a medicine. If you have concerns, seek advice from a
+              qualified pharmacist or healthcare professional.
             </p>
           </div>
         )}
       </section>
 
-      {/* Unique code status */}
+      {/* Unique pack code */}
       {record.uniqueCode && (
         <section className="rounded-2xl border border-[#E9E5F1] bg-white p-5 sm:p-6">
           <div className="flex items-start gap-3">
@@ -203,13 +237,17 @@ export default function VerificationResult() {
                   <p className="text-sm font-bold text-[#242039]">
                     {codeStatus === "dispensed"
                       ? "Previously recorded as dispensed"
-                      : "No prior dispensing recorded"}
+                      : codeStatus === "unknown"
+                        ? "Code status unknown"
+                        : "No prior dispensing recorded"}
                   </p>
 
                   <p className="mt-1 text-xs leading-5 text-gray-500">
                     {codeStatus === "dispensed"
-                      ? "This code has a prior dispensing record. It may have been scanned again or copied onto another package. An authorized investigation is needed."
-                      : "This demonstration record contains no prior dispensing event. This does not by itself prove the package is genuine or unused."}
+                      ? "This demonstration code has a previous dispensing record. A repeated scan or copied code requires investigation."
+                      : codeStatus === "unknown"
+                        ? "The code status could not be established."
+                        : "This demonstration record contains no prior dispensing event. That does not prove the package is genuine or unused."}
                   </p>
                 </div>
               </div>
@@ -218,7 +256,7 @@ export default function VerificationResult() {
         </section>
       )}
 
-      {/* Main medicine information */}
+      {/* Basic product information */}
       <section className="rounded-2xl border border-[#E9E5F1] bg-white p-5 sm:p-6">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-purple-100 text-[#4926C8]">
@@ -226,7 +264,9 @@ export default function VerificationResult() {
           </div>
 
           <div>
-            <h2 className="font-bold text-[#242039]">Medicine identified</h2>
+            <h2 className="font-bold text-[#242039]">
+              Medicine identified
+            </h2>
             <p className="mt-1 text-xs text-gray-500">
               Basic product information
             </p>
@@ -242,7 +282,7 @@ export default function VerificationResult() {
         </p>
 
         <Link
-          to={`/medicine-details?demo=${demoType}&used=${codeStatus === "dispensed"}`}
+          to={detailsUrl}
           className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#4926C8] px-5 py-3.5 text-sm font-bold text-white transition hover:bg-[#381BA8] sm:w-auto"
         >
           View full medicine details
@@ -260,7 +300,7 @@ export default function VerificationResult() {
               Recorded supply chain
             </h2>
             <p className="mt-1 text-xs text-gray-500">
-              Sample records, where available
+              Sample information, where available
             </p>
           </div>
         </div>
@@ -275,11 +315,14 @@ export default function VerificationResult() {
               <div className="flex flex-col items-center">
                 <span
                   className={`h-3 w-3 rounded-full ${
-                    value && !value.startsWith("No ") && value !== "Not recorded"
+                    value &&
+                    !value.startsWith("No ") &&
+                    value !== "Not recorded"
                       ? "bg-[#4926C8]"
                       : "bg-gray-300"
                   }`}
                 />
+
                 {index < 2 && (
                   <span className="my-1 h-6 w-px bg-gray-200" />
                 )}
@@ -296,7 +339,7 @@ export default function VerificationResult() {
         </div>
 
         <Link
-          to={`/medicine-details?demo=${demoType}&used=${codeStatus === "dispensed"}`}
+          to={detailsUrl}
           className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-[#4926C8] hover:underline"
         >
           Explore full history
@@ -304,15 +347,15 @@ export default function VerificationResult() {
         </Link>
       </section>
 
-      {/* Development-only preview control */}
+      {/* Developer-only demonstration control */}
       <details className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-4">
         <summary className="cursor-pointer text-sm font-bold text-gray-600">
           Developer preview: simulate a dispensing record
         </summary>
 
         <p className="mt-3 text-xs leading-5 text-gray-500">
-          This control is for UI testing only. It does not update a database or
-          mark a real medicine as dispensed.
+          This control is for UI testing only. It does not mark a real
+          medicine as dispensed or update a backend database.
         </p>
 
         <div className="mt-3 flex flex-wrap gap-2">
@@ -338,8 +381,8 @@ export default function VerificationResult() {
         <ShieldCheck size={20} className="mt-0.5 shrink-0" />
         <p className="text-xs leading-6">
           Registry matching and code history do not test the medicine inside.
-          Ask a qualified healthcare professional if you have concerns about
-          the medicine or its effectiveness.
+          If you are concerned about its effectiveness, speak with a qualified
+          healthcare professional.
         </p>
       </footer>
     </div>
