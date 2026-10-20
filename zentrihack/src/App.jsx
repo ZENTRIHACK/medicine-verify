@@ -4,6 +4,7 @@ import Layout from "./components/Layout";
 import Home from "./pages/Home";
 import ScanMedicine from "./pages/ScanMedicine";
 import VerificationResult from "./pages/VerificationResult";
+import MedicineDetails from "./pages/MedicineDetails";
 
 function Placeholder({ title }) {
   return (
@@ -50,6 +51,10 @@ export default function App() {
         <Route
         path="results"
         element={<VerificationResult />}
+        />
+        <Route
+        path="medicine-details"
+        element={<MedicineDetails />}
         />
 
         <Route path="*" element={<Navigate to="/" replace />} />
