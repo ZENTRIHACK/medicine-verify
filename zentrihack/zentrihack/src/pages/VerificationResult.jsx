@@ -82,6 +82,7 @@ export default function VerificationResult() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const demoType = searchParams.get("demo") || "match";
+  const isUploadedImage = searchParams.get("source") === "upload";
   const record = demoRecords[demoType] || demoRecords.match;
 
   // Stable ID for each demonstration scenario.
@@ -157,13 +158,15 @@ export default function VerificationResult() {
         </h1>
 
         <p className="mt-2 text-sm text-gray-500">
-          Here's what we found about this medicine package.
+          {isUploadedImage ? "Your scan is ready for backend integration." : "Here's what we found in this demonstration record."}
         </p>
       </header>
 
       <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
-        <strong>DEMO PREVIEW.</strong> This result uses fictional sample data.
-        It has not been checked against a live registry.
+        <strong>{isUploadedImage ? "SCAN RECEIVED — VERIFICATION NOT RUN." : "DEMO PREVIEW."}</strong>{" "}
+        {isUploadedImage
+          ? "Your image was selected, but OCR and the live registry API are not connected yet. No medicine authenticity conclusion has been made."
+          : "This result uses fictional sample data. It has not been checked against a live registry."}
       </div>
 
       {/* Main verification outcome */}
