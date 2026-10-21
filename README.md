@@ -724,3 +724,705 @@ No password is required by design. The API source contains an explicit comment t
 | Regulator | Pulls the alert feed on mount. Alert types are mapped through `web/src/lib/lexicon.js`. |
 | Public | Search/scan/photo. The pack-photo section is always rendered, but an upload is rejected until a current serial has been resolved. |
 
+
+---
+
+## 4. Cryptographic Security & Red Team Defenses
+
+> This section separates **implemented controls** from **production requirements**. It is an engineering threat model, not a certification or a claim that the prototype is ready for clinical deployment.
+
+### 4.1 Assets, actors, and trust boundaries
+
+| Asset | Why it matters | Where it lives |
+| --- | --- | --- |
+| Serial → batch mapping | Ties a physical identifier to one registered product record. | `packs`, `batches` |
+| Custody trail | Shows who recorded each handoff and when. | `events` |
+| Session tokens | Grant access to role-gated actions. | `actors.token`, browser localStorage |
+| Regulator alerts | Surface unknown serials, custody mismatches, duplicates, and OCR mismatches. | `alerts` |
+| OCR comparison result | Determines whether visible fields agree with the registry. | Computed in `api/src/ocr-tesseract.js` |
+| Chain mirror | Optional audit anchor for registration, transfer, and dispensing. | `PackRegistry.sol`, `deployments.json` |
+| Availability | Public verification and pharmacy dispensing are latency-sensitive. | Fly machine, SQLite volume, Tesseract worker |
+
+| Trust boundary | What crosses it | Default posture |
+| --- | --- | --- |
+| Browser → API | JSON, multipart images, bearer tokens, serials | Untrusted input; CORS is open; validation is application-level. |
+| API → SQLite | SQL statements and local file access | Trusted process; no database-level row security. |
+| API → OCR worker | Image bytes and extracted text | Untrusted image content; Tesseract parser is in-process. |
+| API → EVM node | Signed relayer transactions | Trusted relayer; local JSON-RPC by default. |
+| Operator → deployment | Environment variables and volume contents | No secrets manager or key rotation in the repository. |
+| Public → public pages | Serial lookups and photo uploads | No session required by design. |
+
+| Adversary | Relevant capability |
+| --- | --- |
+| Public scanner | Can query any serial and upload images; can enumerate known/leaked identifiers. |
+| Session-gated actor | Can call endpoints outside the UI, including transfers the UI does not expose. |
+| Token thief | Can replay a bearer token until it is replaced or the database is reset. |
+| Label copier | Can copy a valid QR code and printed fields onto another box. |
+| Image adversary | Can submit unrelated, doctored, blurry, oversized, or parser-stressing images. |
+| Network observer | Can see traffic if TLS is not enforced; local development uses HTTP. |
+| Chain relayer compromise | Can write arbitrary role assignments and pack events to the contract. |
+| Operator error | Can reset the database, expose a volume, mis-set `VITE_USE_MOCKS`, or deploy the OCR stub. |
+
+### 4.2 Serial entropy and identifier threats
+
+| Quantity | Calculation | Result |
+| --- | --- | --- |
+| Random input | 16 bytes × 8 bits | 128 bits |
+| Alphabet | `0123456789ABCDEFGHJKMNPQRSTVWXYZ` | 32 symbols |
+| Bits per serial character | `log2(32)` | 5 bits |
+| Serial length | Fixed by loop | 16 characters |
+| Encoded serial space | `32^16` | `2^80` ≈ 1.21 × 10²⁴ |
+| Modulo bias | `256 % 32 = 0` | None for this mapping |
+| Server collision retry | None | A duplicate hits the `packs.serial` primary key and becomes a database error |
+| Mock collision retry | Re-rolls on collision or forbidden word | Implemented in `web/src/mocks/seed.js` |
+
+For context, the birthday approximation `N² / (2 × 2⁸⁰)` gives a collision probability of roughly `4.1 × 10⁻¹³` at one million generated serials and `4.1 × 10⁻¹¹` at ten million. The practical constraint is not guessing; it is copying a serial or QR code that is already public.
+
+**Key distinction**
+
+- A serial is an **identifier**, not a secret and not a signature.
+- Entropy makes blind enumeration expensive. It does not bind the identifier to a physical package.
+- Printing a QR code that points to `/v/<serial>` exposes the identifier to anyone who can see or photograph the pack.
+- The server does not compare a photographed serial with the serial encoded in the QR code; it verifies the submitted serial and separately compares OCR fields.
+
+### 4.3 Session and permission controls
+
+| Control | Implementation | Assessment |
+| --- | --- | --- |
+| Login | `POST /api/login` with `username` only | Demo-only; no password, account recovery, or identity proof. |
+| Token generation | `crypto.randomUUID()` | UUID v4 has 122 random bits; adequate as a demo bearer value. |
+| Token storage | Plain `TEXT` in `actors.token` | No hash, expiry, scope, or rotation history. |
+| Token replacement | A new login overwrites the actor’s previous token | Old token becomes invalid only when a replacement is written. |
+| Logout | Frontend clears localStorage | No server-side revocation endpoint; the database token remains valid. |
+| Bearer extraction | Exact `Authorization: Bearer <token>` prefix | Missing, blank, or unknown tokens return `401 unauthorized`. |
+| Batch permission | `actor.role === "manufacturer"` | Enforced. |
+| Dispense permission | `actor.role === "pharmacy"` | Enforced. |
+| Alert permission | `actor.role === "regulator"` | Enforced. |
+| Transfer permission | Session, recipient role, current holder, not dispensed | Sender role is **not** restricted; see the transfer gap below. |
+| Transfer gap | A pharmacy holding a pack can call transfer directly | The UI does not expose it, but the API permits it because the sender role is not checked. |
+| Public verification | No session | Intentional read-only surface. |
+| CORS | `cors()` with no origin allowlist | Any web origin can call the API if it has a valid token. |
+| CSRF | Bearer token in localStorage, not an ambient cookie | Cookie-style CSRF is not the primary concern; XSS is. |
+| Security headers | None configured in Express | No Helmet, CSP, HSTS, or frame policy at the application layer. |
+| Login throttling | None | Username guessing and token probing are not rate-limited. |
+
+**Token lifecycle reality:** the API is stateless on the request path except for the database lookup, but the token itself is stateful in `actors.token`. There is no expiry timestamp, no refresh token, no per-device session table, and no server logout. Resetting the database removes all tokens; changing an actor’s token by logging in again invalidates the prior token.
+
+**Browser storage:** `web/src/api.js` writes the token and actor under both `zentriq_token`/`zentriq_actor` and `token`/`actor`. Any script executing in the page origin can read both. The dashboard logout path calls `localStorage.clear()`, which also removes mock data and locally persisted activity logs, not just the session.
+
+### 4.4 Registry integrity and transaction atomicity
+
+| Operation | Local transaction scope | External side effect | Rollback behavior |
+| --- | --- | --- | --- |
+| Batch registration | `batches` row + all `packs` rows + all `registered` events | One chain `registerPacks` call | SQLite transaction rolls back on local error. Chain failure is caught after commit and does not undo the batch. |
+| Custody transfer | All `packs` holder/status updates + all `transferred` events | One chain `transfer` per serial | SQLite transaction rolls back on local error. Chain failures are logged per call; local success remains. |
+| First dispense | `packs.status = dispensed` + `dispensed` event | One chain `dispense` call | SQLite transaction rolls back on local error. Chain failure does not undo dispensing. |
+| Duplicate dispense | `conflict` event + `double_dispense` alert | One chain `dispense` call | Conflict transaction rolls back on local error. Chain failure does not remove the conflict record. |
+| OCR mismatch | Alert insert only | None | No surrounding transaction; a failure is logged. |
+
+`better-sqlite3` is synchronous. In a single Node process, the check-then-write sequences in transfer and dispense are not interleaved by another request because no `await` occurs between the checks and the transaction. That is the practical race protection. It is **not** a database-enforced compare-and-swap:
+
+- The transfer pre-checks are outside `db.transaction()`.
+- The dispense checks are outside the write transaction.
+- The update statements do not include `WHERE status = ...` guards.
+- There is no unique constraint on `events` to prevent repeated identical events.
+- Running multiple API processes against the same SQLite file would create a check-then-write race window.
+
+**Schema integrity gaps**
+
+| Gap | Consequence |
+| --- | --- |
+| No foreign keys | Orphaned packs, events, or alerts are possible after manual database edits. |
+| `actors.username` is not `UNIQUE` | Duplicate usernames are possible outside the seed path; login uses a single-row lookup. |
+| `actors.token` is not `UNIQUE` or indexed | Shared tokens and slow lookups are possible; the demo seed does not create duplicates. |
+| `batches.batchNo` is not `UNIQUE` | The same batch number can be registered more than once. |
+| No secondary indexes | `events.packSerial` and `alerts.serial` scans grow with table size. |
+| No migrations | Schema changes require manual handling; `ensureInitialized` only checks whether tables exist. |
+| No backup or WAL policy in code | Recovery depends on the deployment’s volume practices. |
+
+### 4.5 OCR threat model
+
+| Threat | Implemented control | Residual risk |
+| --- | --- | --- |
+| Unrelated image (person, food, scenery) | Route requires `isMedicinePackage === true`; false returns `422 not_medicine`. | Classification is heuristic and image-dependent. |
+| Fuzzy or ambiguous image | Missing `isMedicinePackage` returns `422 image_unclassified`; `comparePack` returns `unreadable` below `0.6`. | A clear but misleading image can still pass. |
+| Doctored expiry or batch print | Deterministic normalization and field comparison; mismatch records an `ocr_mismatch` alert. | A copied label or a convincing reprint can match the record. |
+| Expected-value bias | Extraction receives the registered batch/expiry and can prefer expected tokens found in the image. | This can mask a difference if expected tokens appear elsewhere on the packaging; comparison is not a blinded test. |
+| Manufacturer mismatch | Comparison code supports a registered manufacturer. | The API passes no registered manufacturer because `batches` lacks the column, so this check is inert. |
+| Oversized upload | Multer caps one file at 8 MiB and buffers it in memory. | No image-dimension limit, decompression-bomb guard, or decoder timeout. |
+| Wrong file type | MIME allowlist for JPEG/PNG/WebP. | MIME is client-declared; the API does not inspect magic bytes. |
+| Parser stress | Tesseract worker is a lazy singleton. | No queue, per-request timeout, concurrency limit, or CPU budget; OCR is a public endpoint. |
+| Repeated mismatches | Each mismatch inserts an alert. | No deduplication or alert rate limit; a caller can grow the alert table. |
+| Stub deployment | `OCR_MODE=stub` selects the stub. | The stub lacks `isMedicinePackage`, so every upload is rejected with `422 image_unclassified`; this is the Docker/Fly default. |
+
+**OCR result semantics**
+
+- `match` means readable batch and expiry agree with the stored batch. It does not mean the physical medicine is correct.
+- `mismatch` means at least one compared field differs. It is still an HTTP `200` response with a domain result and an alert.
+- `unreadable` means the required fields or confidence were insufficient. It returns `422`.
+- `not_medicine` means the classifier rejected the image. It returns `422`.
+- OCR text is normalized before comparison: batch separators are removed, `O`/`I` confusion is normalized, and expiry dates are reduced to year-month.
+
+### 4.6 Chain trust model
+
+The chain contract provides a **relayer-attested audit trail**, not independent actor signatures.
+
+| Property | Reality |
+| --- | --- |
+| Who submits transactions? | The API process via `chain/wrapper.js` and `provider.getSigner()`. |
+| Who authorizes writes? | The contract’s `relayer` address; every mutating function is `onlyRelayer`. |
+| Do manufacturers/pharmacies sign? | No. Their demo addresses are passed as arguments; the relayer signs the transaction. |
+| Is the relayer key handled by the API? | Not in the wrapper. It relies on an unlocked JSON-RPC signer. `chain/index.js` is a separate implementation that does use `PRIVATE_KEY`, but the API does not import it. |
+| Which network does the wrapper use? | It always reads `deployments.localhost`; `CHAIN_NETWORK` is not consulted by the wrapper. |
+| Is chain state reconciled? | No. SQLite remains the source of truth even if the chain rejects or misses an event. |
+| Can the API report success after a chain failure? | Yes. Chain exceptions are logged and the local response is still success. |
+| What happens if the relayer is compromised? | The attacker can assign roles and submit arbitrary pack transitions within the contract’s rules. |
+| Is there an upgrade or pause path? | No; the contract is immutable and has no pause function. |
+
+On-chain hashes are `keccak256(utf8(serial))` via `ethers.id()`. The contract stores `bytes32` hashes, not raw serials. The deployment script seeds the same six demo addresses used by the API actor seed.
+
+### 4.7 Input validation and injection resistance
+
+| Area | Implemented behavior | Gap |
+| --- | --- | --- |
+| SQL injection | All dynamic values use prepared statements and bound parameters. | No raw SQL construction from user input was found in the request paths. |
+| JSON body size | `express.json({ limit: "1mb" })`. | Large batch arrays are bounded by route logic, but string field lengths are not explicitly capped. |
+| Batch fields | `productName`, `batchNo`, and `expiry` must be non-empty strings after trim. | `expiry` is not parsed or validated as a date; any non-empty string is stored. |
+| Quantity | Whole-number integer from `1` to `10000`. | No per-account quota or total-storage quota. |
+| Transfer serials | Non-empty array, at most 500, unique non-empty strings. | No format check against the 16-character alphabet. |
+| Recipient | Positive whole-number actor ID, existing actor, distributor/pharmacy, not self. | Sender role is not checked. |
+| Alerts limit | Parsed integer clamped to `1..1000`, default `200`. | No pagination or cursor; older alerts become unreachable through this route beyond the limit. |
+| OCR file | One file, 8 MiB maximum, MIME allowlist, memory storage. | No magic-byte validation, image dimension limit, or malware scanning. |
+| Serial input | Trimmed; empty serial rejected. | Case-sensitive; no uppercase normalization server-side. |
+| Path traversal | No user-controlled filesystem paths. | `DB_FILE` is operator-controlled. |
+| Command injection | No shell execution from request data. | Not applicable in the request path. |
+| SSRF | No user-supplied URLs are fetched. | Chain `RPC_URL` is operator-controlled. |
+
+### 4.8 Red-team matrix
+
+| Attack | Attempted path | Current control | Residual risk |
+| --- | --- | --- | --- |
+| **Serial enumeration** | Query `/api/verify/:serial` across the `2⁸⁰` space. | Large encoded space; no useful ordering. | Leaked or printed serials expose holder names, places, and trails; no rate limit. |
+| **QR/label copying** | Copy a valid QR and printed batch/expiry onto another box. | Registry lookup and OCR field comparison. | The clone can match the record; there is no physical binding or serial-to-QR comparison. |
+| **Token replay** | Use a stolen bearer token from localStorage. | Token is required for gated routes. | No expiry or server logout; token remains valid until replaced/reset. |
+| **Role escalation via API** | Call `/api/batches`, `/api/dispense`, or `/api/alerts` as the wrong role. | Explicit role checks on those routes. | Transfer sender role is not checked; a holder can transfer outside the intended UI path. |
+| **Double dispense (same holder)** | Dispense the same serial twice as the recorded holder. | Conflict event + `double_dispense` alert; chain conflict event. | The conflict is recorded, not prevented; the UI must stop the handoff. |
+| **Double dispense (different pharmacy)** | Dispense a pack held by another pharmacy. | Current-holder check returns `409 blocked` and records `custody_mismatch`. | This is not a `double_dispense` conflict; the UX language must distinguish the two. |
+| **Concurrent dispensing** | Fire two dispense requests at once. | Single-process synchronous checks and transactions. | Multi-process or horizontal scaling can race because there is no conditional update. |
+| **SQL injection** | Inject SQL through login, batch, transfer, dispense, or serial fields. | Prepared statements. | No evidence of dynamic SQL injection in the request path. |
+| **Unrelated image** | Upload a photo of an object that is not medicine. | Classification gate; fail-closed route. | Classifier false positives; stub mode rejects every upload. |
+| **Doctored expiry** | Photograph a pack with a changed expiry. | OCR extraction + deterministic comparison + mismatch alert. | Expected-value assistance and copied labels can reduce detection. |
+| **Image parser abuse** | Submit an image designed to consume CPU/memory or exploit a decoder. | 8 MiB cap and MIME allowlist. | No dimension limit, timeout, queue, or sandbox boundary. |
+| **Alert flooding** | Repeated OCR mismatches or failed dispense requests. | Alerts are recorded. | No per-serial dedupe and no write rate limit; storage can grow. |
+| **Chain divergence** | Block or fail chain RPC after a local write. | Chain errors are logged; SQLite remains authoritative. | No outbox/reconciliation; the audit mirror can silently lag. |
+| **Relayer compromise** | Use the relayer key to write arbitrary contract state. | `onlyRelayer` limits writers to one address. | That one address is a single point of trust; there is no multi-signature or actor signature. |
+| **Mock-mode confusion** | Ship the frontend with mocks enabled and mistake it for the API. | `VITE_USE_MOCKS` is explicit; mock DB is separate. | Mocks are on by default; a deployment that forgets `false` will not touch the registry. |
+| **Session theft via XSS** | Execute script in the portal origin and read localStorage. | React escapes rendered strings; no `dangerouslySetInnerHTML` was found in the reviewed pages. | No CSP or security headers; any future XSS can read both token keys. |
+| **Privacy enumeration** | Query public records to map facilities and movements. | No session required; by design. | Holder names, places, and timelines are public; there is no redaction policy. |
+| **Database disclosure** | Read the SQLite file or volume. | Filesystem permissions from the host/container. | No application-level encryption; actor tokens and the full trail are readable. |
+
+### 4.9 Production hardening roadmap
+
+| Priority | Change | Why |
+| --- | --- | --- |
+| **P0** | Replace username-only login with an identity provider or password login using Argon2id/scrypt, expiring sessions, revocation, and per-device records. | The current login is explicitly a demo compatibility path. |
+| **P0** | Add API rate limits and per-route quotas for login, public verify, OCR, and alerts. | Public endpoints and CPU-heavy OCR are currently unthrottled. |
+| **P0** | Restrict CORS to known frontend origins; add security headers, CSP, and HSTS at the edge. | `cors()` currently allows every origin. |
+| **P0** | Add image magic-byte checks, dimension limits, decode timeouts, and an OCR work queue. | The current upload path trusts MIME and buffers up to 8 MiB in memory. |
+| **P0** | Add foreign keys, unique constraints, conditional updates, migrations, and a documented backup/restore procedure. | SQLite currently relies on application discipline for integrity. |
+| **P0** | Add an outbox or reconciliation job for chain writes, or remove the chain from the operational path. | Chain failures currently diverge silently from SQLite. |
+| **P0** | Add CI covering API route tests, frontend build, chain tests, and OCR comparison tests. | The API has no automated test suite. |
+| **P1** | Add a `manufacturer` column to `batches` and enforce manufacturer comparison. | The comparison code supports it, but the registered value is missing. |
+| **P1** | Require actor signatures for chain writes instead of relayer-attested arguments. | On-chain data currently attests to the relayer, not the named actor. |
+| **P1** | Deduplicate alerts and paginate the regulator feed. | Repeated mismatches and a 1000-row cap otherwise hide history. |
+| **P1** | Define a privacy policy for public holder/place/trail exposure. | The public page exposes organisation movement data. |
+| **P1** | Add structured logging, metrics, and alerting around OCR latency, chain failures, and 5xx rates. | The current system logs to process stdout. |
+| **P2** | Move to a multi-writer database or a single-writer service with horizontal API scaling. | SQLite on one volume constrains deployment topology. |
+| **P2** | Add key management, rotation, and encrypted secret storage. | Environment variables are the only secret mechanism in the repository. |
+| **P2** | Commission an independent security review and a clinical/regulatory review. | The current scope is a prototype and registry demonstration. |
+
+### 4.10 Privacy and data handling
+
+- The registry stores organisation names, places, and EVM-style demo addresses. It does **not** store patient names, prescriptions, or clinical records.
+- A dispense event records the pharmacy actor and timestamp, not the patient.
+- Public verification exposes the current holder, place, event timeline, and transaction hashes. Treat serials as shareable identifiers, not private data.
+- Alert details can contain OCR differences, which may include batch/expiry strings.
+- Tokens are stored in localStorage and in plaintext in SQLite. Browser extensions or scripts in the origin can read them.
+- There is no data-retention, deletion, export, or redaction workflow in the application.
+- The Fly volume and database file rely on platform/disk controls; the application does not encrypt fields itself.
+
+### 4.11 Security claims this repository supports
+
+| Claim | Supported? | Qualification |
+| --- | --- | --- |
+| Serials use a cryptographic random source | Yes | `crypto.randomBytes(16)`; 80-bit encoded space. |
+| SQL statements are parameterized | Yes | Request-path inserts/selects/updates use bound parameters. |
+| Batch registration is atomic in SQLite | Yes | Single `db.transaction()` for batch, packs, and events. |
+| Transfer is atomic in SQLite | Yes | Single transaction for pack updates and events. |
+| Duplicate dispensing by the same holder is recorded | Yes | Conflict event + `double_dispense` alert. |
+| Duplicate dispensing by a different holder is recorded as a conflict | No | It follows the custody-mismatch path instead. |
+| Sessions are production-grade | No | Username-only login, non-expiring plaintext tokens. |
+| The API is protected against abuse | No | No rate limits, open CORS, no security headers. |
+| OCR proves the medicine is correct | No | It compares visible fields with one registry row. |
+| The chain independently proves actor intent | No | The relayer submits every write. |
+| The database is tamper-evident | No | No hash chain, signing, or append-only audit service beyond the schema. |
+| The deployment supports multiple API writers | No | SQLite volume plus check-then-write logic assumes a single process. |
+
+
+---
+
+## 5. Local Setup & Deployment
+
+### 5.1 Prerequisites
+
+| Requirement | Notes |
+| --- | --- |
+| Node.js 20 LTS | `.nvmrc` contains `20`; `web/package.json` requires `>=20`; `ocr/package.json` declares `20.x`. |
+| npm | All packages use npm lockfiles; `npm ci` is preferred for reproducible installs. |
+| Native build tools | `better-sqlite3` may compile from source if a prebuilt binary is unavailable. Install `python3`, `make`, and a C++ compiler (`g++` on Debian/Ubuntu). |
+| Git | For branch/PR workflows and for viewing the exact commit under review. |
+| Docker | Optional; required only for testing the Fly-style image locally. |
+| Fly CLI | Optional; required only for Fly deployment. |
+| Camera access | Browsers require HTTPS or `localhost` for `getUserMedia`. Production hosting is HTTPS; local Vite on `localhost` is accepted. |
+| Outbound network for real OCR | Tesseract.js may need to fetch language data on first use. |
+
+### 5.2 Fast path: frontend-only mock demo
+
+The mock API is the lowest-friction way to see the product. It needs no backend, database, chain, or OCR worker.
+
+```bash
+cd web
+npm ci
+npm run dev
+```
+
+Vite prints a local URL, normally `http://localhost:5173`.
+
+**Default behavior**
+
+- Mocks are on by default: `web/src/api.js` disables them only when `VITE_USE_MOCKS` is exactly the string `"false"`. The ignored local `web/.env` also sets `VITE_USE_MOCKS=true`.
+- Login accepts the four quick-login usernames: `zenocare`, `afyalink`, `mlimani`, `regulator`.
+- The mock DB seeds two serials:
+  - `K7Q2M9XW4TBH3N8D` — in custody at Mlimani Pharmacy.
+  - `R4T8V2YC6DJH9PXM` — conflict state with a `double_dispense` alert.
+- Mock state persists at `localStorage["zentriq_mock_db_v1"]`.
+
+Reset the mock database from the browser console:
+
+```js
+localStorage.removeItem('zentriq_mock_db_v1');
+location.reload();
+```
+
+Logging out through the dashboard also calls `localStorage.clear()` and therefore resets the mock database, session, and locally persisted activity logs.
+
+### 5.3 Full local stack with the real API
+
+Use two terminals.
+
+**Terminal 1 — API**
+
+```bash
+cd api
+npm ci
+CHAIN_MODE=stub OCR_MODE=stub npm run dev
+```
+
+The API listens on `http://localhost:3001` by default. On first boot it creates the database at `api/data/demo.db` and seeds the six demo actors. Startup output includes:
+
+```text
+Server listening on port 3001
+OCR implementation: STUB
+```
+
+The second line is only accurate for `OCR_MODE=real`; see the quirks section below. The actual adapter is selected in `api/src/integrations.js`.
+
+**Terminal 2 — frontend against the API**
+
+```bash
+cd web
+npm ci
+printf 'VITE_USE_MOCKS=false\nVITE_API_URL=\n' > .env.local
+npm run dev
+```
+
+Vite proxies `/api` to `http://localhost:3001` because `web/vite.config.js` defines that proxy. Restart the Vite dev server after changing `.env.local`; Vite reads environment variables at startup/build time.
+
+If you prefer not to create `.env.local`:
+
+```bash
+VITE_USE_MOCKS=false VITE_API_URL= npm run dev
+```
+
+**Why `VITE_API_URL` is empty locally:** frontend requests already include the `/api` prefix. An empty base URL keeps relative calls (`/api/verify/...`) and lets the Vite proxy handle the origin. Setting `VITE_API_URL=/api` produces `/api/api/...`.
+
+**The API does not automatically load `api/.env`.** `dotenv` is a dependency, but `api/src/index.js` never calls `dotenv.config()`. Use exported shell variables, or start Node with an env file on a compatible Node version:
+
+```bash
+cd api
+node --env-file=.env src/index.js
+```
+
+The API does not require an `.env` file for the default demo setup.
+
+### 5.4 Environment variables
+
+#### API and chain
+
+| Variable | Default | Actual behavior |
+| --- | --- | --- |
+| `PORT` | `3001` | Express listen port. |
+| `DB_FILE` | `api/data/demo.db` | SQLite file path. If set to a relative path, it is resolved from the process working directory. Fly sets `/data/prod.db`. |
+| `CHAIN_MODE` | unset | Only the exact value `real` loads `chain/wrapper.js`. Every other value, including `mock`, `stub`, or an empty value, loads `api/src/stubs/chain.js`. |
+| `OCR_MODE` | unset | Only the exact value `stub` loads `api/src/stubs/ocr.js`. Every other value, including `mock` or `real`, loads the Tesseract adapter. |
+| `RPC_URL` | `http://127.0.0.1:8545` | JSON-RPC endpoint used by `chain/wrapper.js`. |
+| `CHAIN_NETWORK` | unset | Used by the separate `chain/index.js` relayer and by Hardhat deployment selection, not by `chain/wrapper.js`. |
+| `PRIVATE_KEY` | unset | Used by `chain/index.js` and the Hardhat Sepolia network configuration. The API wrapper uses `provider.getSigner()` instead. Never commit a funded key. |
+| `LOCAL_RPC_URL` | `http://127.0.0.1:8545` | Hardhat `localhost` network URL in `chain/hardhat.config.js`. |
+| `SEPOLIA_RPC_URL` | empty | Hardhat Sepolia RPC URL. |
+| `OCR_API_KEY` | unset | Used only by the standalone `ocr/` Gemini module and its `test:ocr` script. The API Tesseract path does not read it. |
+| `GEMINI_MODEL` | `gemini-3.5-flash` | Used only by the standalone `ocr/` module. |
+| `NODE_ENV` | unset | Set to `production` in `api/Dockerfile`; no application branching on it was found. |
+
+#### Frontend
+
+| Variable | Default | Actual behavior |
+| --- | --- | --- |
+| `VITE_USE_MOCKS` | mocks on | Mocks are disabled only when the value is the exact string `false`. Absent, empty, `FALSE`, or `true` all keep mocks enabled. |
+| `VITE_API_URL` | empty | Optional API origin. Trailing slashes are stripped. Leave empty for local Vite proxy. Do not append `/api`. |
+| `VITE_*` variables | — | Read at Vite startup/build time; changing them requires a restart or rebuild. |
+
+#### Deployment defaults
+
+`fly.toml` and `api/Dockerfile` set:
+
+```text
+PORT=3001
+DB_FILE=/data/prod.db
+CHAIN_MODE=stub
+OCR_MODE=stub
+```
+
+These defaults are deliberate: the image does not copy `chain/`, and the Docker/Fly deployment is configured for the OCR stub. See [5.6](#56-ocr-modes) and [5.7](#57-chain-mode) before changing them.
+
+### 5.5 Database lifecycle
+
+| Task | Command | Notes |
+| --- | --- | --- |
+| Create/seed on first boot | `npm run dev` | `ensureInitialized()` creates all five tables if any are missing and seeds six actors when `actors` is empty. |
+| Reset to a clean demo database | `npm run reset` | Deletes the database file, recreates the schema, then runs the seed script. Stop the API first. |
+| Seed actors only | `npm run seed` | Inserts the six actors. It is not idempotent: running it twice hits the `actors.id` primary-key constraint. It also assumes the schema already exists. |
+| Inspect the database | Any SQLite client | The default file is `api/data/demo.db`. `api/data/` is untracked and ignored by `*.db` patterns. |
+
+`npm run reset` expands to `node scripts/reset.js && npm run seed`. If you set `DB_FILE`, export it before the command so both child processes use the same path.
+
+**No migration framework exists.** `ensureInitialized()` checks whether all five tables exist; it does not compare columns or apply versioned migrations. For a schema change, use a migration tool or recreate the demo database.
+
+**First boot versus reset:** the API seeds actors only when it creates missing tables. A database with all tables present but no actors will not be re-seeded automatically.
+
+**Token persistence:** tokens live in the database. Restarting the API does not invalidate them; resetting the database does. Logging in again replaces that actor’s token.
+
+### 5.6 OCR modes
+
+| Mode | `OCR_MODE` value | Behavior |
+| --- | --- | --- |
+| Stub | `stub` | `api/src/stubs/ocr.js` returns `{ dummyField, confidence: 1 }`. The API requires `isMedicinePackage === true`, so the upload is rejected with `422 image_unclassified`. This is the Docker/Fly default. |
+| Tesseract | `real` (or any value other than `stub`) | `api/src/ocr-tesseract.js` lazily starts an English Tesseract worker, extracts fields, classifies the image, and compares batch/expiry. |
+| Standalone Gemini | Not selected by the API | `ocr/` is a separate package with its own `OCR_API_KEY` and `npm run test:ocr`. It is not imported by `api/src`. |
+
+Run the API with real Tesseract locally:
+
+```bash
+cd api
+OCR_MODE=real npm run dev
+```
+
+Practical notes:
+
+- The first OCR request initializes the worker and may download English language data. Later requests reuse the worker.
+- Tesseract may create `eng.traineddata` in the working directory. The repository currently has an untracked copy at `api/eng.traineddata`; it is not part of the commit.
+- The API does not need `OCR_API_KEY` for Tesseract.
+- The Docker image and Fly config default to the stub. Setting `OCR_MODE=real` in that image requires outbound access to a language-data source or a baked language file.
+- The 8 MiB upload limit, MIME allowlist, and 0.6 comparison threshold are described in [Section 4.5](#45-ocr-threat-model).
+
+### 5.7 Chain mode
+
+The chain adapter is optional. For local development:
+
+```bash
+# Terminal 1: local Hardhat node
+cd chain
+npm ci
+npx hardhat node
+```
+
+```bash
+# Terminal 2: deploy and register demo actor roles
+cd chain
+npm run deploy:local
+```
+
+The deploy script writes `deployments.json` at the repository root. Then start the API with:
+
+```bash
+cd api
+CHAIN_MODE=real RPC_URL=http://127.0.0.1:8545 OCR_MODE=stub npm run dev
+```
+
+What actually works in this path:
+
+- `chain/wrapper.js` reads `deployments.localhost` and calls the contract through an unlocked JSON-RPC signer.
+- The wrapper uses `ethers.id(serial)` to produce the `bytes32` serial hash.
+- The deploy script registers the same six demo addresses used by `api/src/schema.js`.
+- Chain writes occur after SQLite commits. A missing deployment file, RPC error, or chain revert is logged; the API still returns its local success response.
+- `chain/wrapper.js` does not use `PRIVATE_KEY` or `CHAIN_NETWORK`. `chain/index.js` is a separate relayer implementation that does use `PRIVATE_KEY`; the API does not import it.
+- `CHAIN_MODE=mock` is not a third mode; it selects the stub. Only `real` selects the wrapper.
+- Fly/Docker do not ship `chain/`. Do not set `CHAIN_MODE=real` there.
+
+Run the contract tests:
+
+```bash
+cd chain
+npm test
+```
+
+The Hardhat suite contains nine tests covering registration, duplicate hashes, role rejection, relayer restriction, holder checks, recipient roles, transfer, first dispense, repeat dispense conflict, and non-pharmacy dispensing.
+
+### 5.8 Tests, build, and static checks
+
+| Area | Command | Status |
+| --- | --- | --- |
+| Frontend build | `cd web && npm ci && npm run build` | Produces `web/dist`. No frontend test script exists. |
+| API tests | `cd api && npm test` | Deliberately exits with `Error: no test specified`. There is no automated API suite. |
+| Chain tests | `cd chain && npm ci && npm test` | Nine Hardhat tests. Requires the Hardhat toolchain. |
+| OCR comparison tests | `cd ocr && npm ci && npm test` | Sixteen deterministic comparison cases; no API key required. |
+| OCR image evaluation | `cd ocr && npm run test:ocr` | Requires `OCR_API_KEY` and the image manifest under `ocr/test-images/`. |
+| Root CI | — | No `.github/` workflow or root test runner was found. |
+
+The frontend build may emit two non-fatal warnings:
+
+1. A large-chunk warning because the dashboard and scanner dependencies are bundled together.
+2. A mixed dynamic/static import warning for `html5-qrcode`, which is imported dynamically by dashboards and statically by `web/src/hooks/useQrScanner.js`.
+
+Suggested local verification sequence:
+
+```bash
+cd web && npm run build
+cd ../chain && npm test
+cd ../ocr && npm test
+```
+
+For the API, use the smoke sequence in [5.10](#510-smoke-test) because no route-level tests are committed.
+
+### 5.9 Deployment
+
+#### Vercel frontend
+
+| Setting | Value |
+| --- | --- |
+| Project root | `web/` |
+| Install | `npm ci` |
+| Build | `npm run build` |
+| Output | `dist/` |
+| SPA routing | `web/vercel.json` rewrites every path to `/index.html`; required for `/v/:serial` QR links. |
+| Build-time env | `VITE_USE_MOCKS=false` |
+| API origin | `VITE_API_URL=https://<your-api-host>` (origin only, no `/api` suffix) |
+
+If `VITE_USE_MOCKS` is not set to exactly `false`, the deployed site will keep using browser mocks and will not contact the API. Rebuild after changing any `VITE_*` value.
+
+The API enables permissive CORS, so no Vercel-specific CORS proxy is required.
+
+#### Fly.io API
+
+The checked-in `fly.toml` targets:
+
+| Setting | Value |
+| --- | --- |
+| App | `medicine-verify-api` |
+| Primary region | `jnb` |
+| Build | `api/Dockerfile` |
+| Port | `3001` |
+| Database | `/data/prod.db` on mounted volume `db_data` |
+| Chain | `CHAIN_MODE=stub` |
+| OCR | `OCR_MODE=stub` |
+| HTTPS | `force_https = true` |
+| Machines | Auto-stop/auto-start, minimum zero |
+
+First deployment from the repository root:
+
+```bash
+fly volumes create db_data --region jnb --size 1
+fly deploy
+fly status
+fly logs
+```
+
+Operational notes:
+
+- The volume name in `fly.toml` is `db_data`; it must exist before the app writes to `/data`.
+- The container runs as root so the mounted volume remains writable. Changing to a non-root user requires an entrypoint that fixes volume ownership.
+- The image does not include `chain/`; keep `CHAIN_MODE=stub`.
+- The image defaults to the OCR stub, which rejects all photo uploads. Enable Tesseract only after confirming language-data availability and CPU/memory limits.
+- SQLite on a volume is a single-writer design. Do not scale the app to multiple machines without redesigning storage and write concurrency.
+- `min_machines_running = 0` means the first request after idle can incur a cold start.
+- Use `fly secrets set` for values that should not live in `fly.toml`; the repository does not define any required secrets beyond optional deployment configuration.
+
+#### Docker locally
+
+```bash
+docker build -f api/Dockerfile -t medicine-verify-api .
+docker run --rm -p 3001:3001 -v "$PWD/api/data:/data" medicine-verify-api
+```
+
+This uses `/data/prod.db` and the stub adapters, matching Fly behavior.
+
+### 5.10 Smoke test
+
+Start the API, then verify the public path with no token:
+
+```bash
+curl -s http://localhost:3001/api/verify/UNKNOWN
+```
+
+Expected: HTTP `200` with `"status":"unknown"` and a flag saying no record was found.
+
+Log in as the manufacturer:
+
+```bash
+curl -s -X POST http://localhost:3001/api/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"zenocare"}'
+```
+
+Copy the returned token into `TOKEN`, then register a batch:
+
+```bash
+TOKEN='<token from the login response>'
+
+curl -s -X POST http://localhost:3001/api/batches \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"productName":"Amoxicillin 500mg Capsules","batchNo":"AMX-2026-014","expiry":"2027-03-31","quantity":2}'
+```
+
+Copy one returned serial into `SERIAL`, then transfer to actor `3` (Mlimani Pharmacy):
+
+```bash
+curl -s -X POST http://localhost:3001/api/custody/transfer \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d "{\"serials\":[\"$SERIAL\"],\"toActorId\":3}"
+```
+
+Log in as the pharmacy and dispense:
+
+```bash
+PHARMACY_TOKEN=$(curl -s -X POST http://localhost:3001/api/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"mlimani"}' | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).token')
+
+curl -s -X POST http://localhost:3001/api/dispense \
+  -H "Authorization: Bearer $PHARMACY_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d "{\"serial\":\"$SERIAL\"}"
+```
+
+Repeat the dispense call to see the `409` conflict result and the prior dispenser details.
+
+Verify the public record and trail:
+
+```bash
+curl -s "http://localhost:3001/api/verify/$SERIAL"
+```
+
+Upload a pack photo:
+
+```bash
+curl -s -X POST http://localhost:3001/api/verify/ocr \
+  -F "serial=$SERIAL" \
+  -F "image=@/path/to/pack-photo.jpg"
+```
+
+With `OCR_MODE=stub`, expect `422 image_unclassified`. With real Tesseract and a readable pack photo, expect a comparison result or a field-specific `422`.
+
+### 5.11 Demo runbook (2–3 minutes)
+
+A complete demo can run entirely in mock mode.
+
+1. Start the frontend with `npm run dev` in `web/`.
+2. Log in as `mlimani` (Pharmacy).
+3. Open `/v/K7Q2M9XW4TBH3N8D` in another tab. Show the **in custody** status, product details, holder, and three-event trail.
+4. Open `/v/R4T8V2YC6DJH9PXM`. Show the **Conflict: needs review** banner and the duplicate-dispense flag.
+5. Log in as `regulator`. Show the seeded alert row and its link to the same public record.
+6. Log in as `zenocare`. Register a new batch, show the generated QR cards, and transfer serials to actor `2` (AfyaLink).
+7. Log in as `afyalink`. Add a serial manually or scan it, then dispatch to actor `3` (Mlimani).
+8. Log in as `mlimani`. Dispense that serial; repeat to show the conflict modal. Do not describe the pack as clinically checked.
+9. Return to the public page. Show the updated trail and the registry flags.
+10. If using real Tesseract, upload a readable pack photo and then a deliberately altered-print photo to show `match` versus `mismatch`.
+
+Mock OCR caveat: the public page calls `api.verifyOcr(file, serial)`, which delegates to the mock’s default outcome (`match`) and does not expose an outcome selector. To demonstrate `mismatch` or `unreadable` in mock mode, call `mockApi.ocr(serial, file, 'mismatch')` from a custom harness, or use the real Tesseract path with prepared images.
+
+The clearest demo sentence is the product’s own scope statement: **the check confirms that a pack matches a registry record; it does not test the medicine inside.**
+
+### 5.12 Troubleshooting
+
+| Symptom | Likely cause | Fix |
+| --- | --- | --- |
+| Frontend still shows demo data after starting the API | Mocks are enabled. | Set `VITE_USE_MOCKS=false` in `.env.local` and restart Vite. Verify the value is the exact string `false`. |
+| Requests go to `/api/api/...` | `VITE_API_URL` includes `/api`. | Use the API origin only, e.g. `https://api.example.test`, or leave it empty for the Vite proxy. |
+| API ignores `api/.env` | The API never calls `dotenv.config()`. | Export variables in the shell or start with `node --env-file=.env src/index.js`. |
+| `401 unauthorized` after a reset | The database was recreated and old tokens are gone. | Log in again. |
+| `404 unknown_serial` for a visible serial | Serial case or whitespace differs. | Send the exact uppercase serial; the server only trims, it does not uppercase. |
+| `npm run seed` fails with a primary-key error | The actors already exist. | Use `npm run reset` on a disposable demo database. |
+| `better-sqlite3` install fails | No prebuilt binary for the platform/Node version. | Install Python 3, make, and a C++ compiler, then reinstall. |
+| Camera does not start | Insecure origin, denied permission, or no camera. | Use `localhost` or HTTPS; allow camera permission; use gallery upload or manual serial entry. |
+| OCR always returns `422 image_unclassified` | The API is using the OCR stub. | Run with `OCR_MODE=real`; the stub cannot satisfy the route’s classification gate. |
+| Real OCR is slow or fails on first request | Worker initialization or language-data download. | Allow network access, warm the worker, and confirm memory/CPU headroom. |
+| `CHAIN_MODE=real` crashes at startup | `chain/` is absent or its dependencies/deployment file are missing. | Install `chain/` dependencies, deploy locally, and provide `deployments.json`; keep stub mode in Docker/Fly. |
+| Fly starts but cannot write the database | Volume missing or permissions wrong. | Confirm `db_data` is mounted at `/data`; the image expects to run as root. |
+| Vite build warns about a large chunk or `html5-qrcode` | Scanner dependencies are bundled and imported in two ways. | Treat as a warning; split the scanner into a lazy chunk if bundle size matters. |
+| Dashboard logout wipes mock data and logs | `localStorage.clear()` is intentional in the logout path. | Use a new login or reset the page; the mock seed is recreated. |
+| Regulator page shows no alerts | The alert table is empty or the mock DB was reset. | Create a conflict/unknown-serial event or restore the mock seed. |
+
+### 5.13 Known implementation quirks and source-of-truth notes
+
+These are real behaviors of the current branch, documented so operators do not have to infer them from contradictory examples.
+
+| Quirk | What to know |
+| --- | --- |
+| `.env.example` says `OCR_MODE=mock` | Only `stub` selects the stub. `mock` loads Tesseract. Use `OCR_MODE=stub` explicitly for the stub. |
+| `.env.example` says `CHAIN_MODE=mock` | Only `real` selects the wrapper. `mock` behaves as the stub; `stub` is the clearer value. |
+| `.env.example` sets `VITE_API_URL=/api` | This double-prefixes every request. Leave it empty for the proxy or use the API origin without `/api`. |
+| Startup log says “STUB” for `OCR_MODE=mock` | The log checks `OCR_MODE === "real"`; the adapter checks `OCR_MODE !== "stub"`. Trust the adapter selector in `api/src/integrations.js`. |
+| Public page initially says “No registered record found” | This is the initial `record === null` state before a query, not a server verdict. |
+| Mock public OCR always returns the default `match` | The public page does not pass an outcome; use a custom harness or real OCR for mismatch/unreadable demos. |
+| `App.jsx` imports `SerialEntry.jsx` but does not route it | The mounted pages are Login, Dashboard, and PublicVerify. |
+| Real API derives `conflict` status; mock stores it | `packs.status` remains `dispensed` in the real API; the public status is derived from the alert. |
+| `web/README.md` is the Vite template | The project documentation is this root README; the web README is generic scaffold text. |
+| Docker copies `ocr/` and mentions `OCR_API_KEY` | The API’s `OCR_MODE=real` path is Tesseract, not the standalone Gemini module. |
+| No root `LICENSE` file | The Solidity source carries an SPDX MIT identifier, but repository-wide rights are stated in Section 6. |
+| No API tests | `api/package.json`’s test script intentionally exits with an error. |
+
+### 5.14 Pre-demo and pre-deployment checklist
+
+**Before a local demo**
+
+- [ ] `cd web && npm run build` succeeds.
+- [ ] `VITE_USE_MOCKS` is set as intended (`true` for mock, exact `false` for API).
+- [ ] API is running on port 3001 when mocks are disabled.
+- [ ] Camera permission works on the demo origin, or gallery/manual entry is available.
+- [ ] The two mock seed serials are known: `K7Q2M9XW4TBH3N8D` and `R4T8V2YC6DJH9PXM`.
+- [ ] The demo language distinguishes registry matching from laboratory testing.
+
+**Before a hosted deployment**
+
+- [ ] Set `VITE_USE_MOCKS=false` in the Vercel build environment.
+- [ ] Set `VITE_API_URL` to the API origin only.
+- [ ] Confirm the Fly volume `db_data` exists and the app writes `/data/prod.db`.
+- [ ] Decide whether OCR should remain `stub`; if not, validate Tesseract resources and language data.
+- [ ] Keep `CHAIN_MODE=stub` unless `chain/` and its dependencies are intentionally shipped.
+- [ ] Restrict CORS, add rate limits, and replace the demo login before exposing real data.
+- [ ] Establish database backup and restore procedures.
+- [ ] Run the smoke sequence against the deployed API.
+- [ ] Verify `/v/<serial>` survives a direct browser reload through the Vercel SPA rewrite.
+
