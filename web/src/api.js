@@ -14,7 +14,7 @@ const ACTOR_KEY = 'zentriq_actor';
 
 export function getToken() {
   try {
-    return localStorage.getItem(TOKEN_KEY);
+    return localStorage.getItem('token') || localStorage.getItem(TOKEN_KEY);
   } catch {
     return null;
   }
@@ -22,7 +22,7 @@ export function getToken() {
 
 export function getStoredActor() {
   try {
-    const raw = localStorage.getItem(ACTOR_KEY);
+    const raw = localStorage.getItem('actor') || localStorage.getItem(ACTOR_KEY);
     return raw && getToken() ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -31,8 +31,16 @@ export function getStoredActor() {
 
 function storeSession(token, actor) {
   try {
+    const actorData = {
+      id: actor.id,
+      role: actor.role,
+      name: actor.name,
+      place: actor.place
+    };
     localStorage.setItem(TOKEN_KEY, token);
-    localStorage.setItem(ACTOR_KEY, JSON.stringify(actor));
+    localStorage.setItem(ACTOR_KEY, JSON.stringify(actorData));
+    localStorage.setItem('token', token);
+    localStorage.setItem('actor', JSON.stringify(actorData));
   } catch {
     /* storage unavailable: session lasts until reload */
   }
@@ -42,6 +50,8 @@ export function clearSession() {
   try {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(ACTOR_KEY);
+    localStorage.removeItem('token');
+    localStorage.removeItem('actor');
   } catch {
     /* nothing to clear */
   }
@@ -94,7 +104,7 @@ export const api = {
   },
 
   transfer({ serials, toActorId }) {
-    const body = { serials, toActorId };
+    const body = { serials, toActorId: Number(toActorId) };
     return USE_MOCKS ? mockApi.transfer(body, ctx()) : request('/api/custody/transfer', { method: 'POST', body });
   },
 
