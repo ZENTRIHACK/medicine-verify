@@ -63,16 +63,17 @@ export default function PublicVerify() {
 
   if (loading) return <main className="page-container"><p>Loading…</p></main>;
 
-  const status = record?.status;
+  const result = record;
+  const status = result?.status;
   const bannerClass = statusClass(status);
 
   return (
     <main className="page-container">
       {error && <div className="alert alert--flag" role="alert">{error}</div>}
-      {record && (
+      {result && (
         <>
           <div className={`status-banner status-banner--${bannerClass}`} role="status">
-            {statusText(status)}
+            {strings.status[result.status] || strings.status.unknown}
           </div>
           <section className="card">
             <h1>Product details</h1>

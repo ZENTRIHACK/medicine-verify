@@ -1,4 +1,4 @@
-import strings from '../../../spec/strings.json';
+import strings from '../strings.json';
 
 export { strings };
 

@@ -6,6 +6,7 @@ import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Regulator from './pages/Regulator.jsx';
 import Verify from './pages/Verify.jsx';
+import PublicVerify from './pages/PublicVerify.jsx';
 import Manufacturer from './pages/Manufacturer.jsx';
 import Distributor from './pages/Distributor.jsx';
 import Pharmacy from './pages/Pharmacy.jsx';
@@ -26,7 +27,8 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/login" element={<Login />} />
-      <Route path="/v/:serial" element={<Verify />} />
+      <Route path="/verify" element={<Verify />} />
+      <Route path="/v/:serial" element={<PublicVerify />} />
       <Route
         path="/dashboard"
         element={
