@@ -250,7 +250,7 @@ export default function VerificationResult() {
                       ? "This demonstration code has a previous dispensing record. A repeated scan or copied code requires investigation."
                       : codeStatus === "unknown"
                         ? "The code status could not be established."
-                        : "This demonstration record contains no prior dispensing event. That does not prove the package is genuine or unused."}
+                        : "This demonstration record contains no prior dispensing event. This check confirms a pack matches a registry record. It does not test the medicine inside."}
                   </p>
                 </div>
               </div>
