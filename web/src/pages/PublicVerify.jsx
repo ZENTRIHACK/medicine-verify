@@ -133,13 +133,59 @@ export default function PublicVerify() {
             </section>
           )}
           <section className="card">
-            <h2>Image check</h2>
-            <label htmlFor="ocr-image">Choose or capture a product image</label>
-            <input id="ocr-image" type="file" accept="image/*" capture="environment" onChange={handleOcrUpload} />
-            {ocrLoading && <p>Processing image…</p>}
+            <h2>Pack photo verification</h2>
+            <p className="muted" style={{ margin: '0.25rem 0 0.75rem', fontSize: '0.9rem', color: '#64748b' }}>
+              Verify printed packaging details against the record using your camera or an image from your gallery.
+            </p>
+            <div className="ocr-upload-controls" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginTop: '0.75rem' }}>
+              <label
+                className="btn btn-primary"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  cursor: 'pointer',
+                  margin: 0,
+                  padding: '0.5rem 1rem',
+                  borderRadius: '6px'
+                }}
+              >
+                📷 Take Photo
+                <input
+                  id="ocr-camera"
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleOcrUpload}
+                  style={{ display: 'none' }}
+                />
+              </label>
+              <label
+                className="btn btn-secondary"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  cursor: 'pointer',
+                  margin: 0,
+                  padding: '0.5rem 1rem',
+                  borderRadius: '6px'
+                }}
+              >
+                🖼️ Choose from Gallery
+                <input
+                  id="ocr-gallery"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleOcrUpload}
+                  style={{ display: 'none' }}
+                />
+              </label>
+            </div>
+            {ocrLoading && <p style={{ marginTop: '0.75rem', color: '#64748b' }}>Processing image…</p>}
             {ocrResult && (
-              <div className="ocr-result">
-                <p>{ocrText(ocrResult.match)}</p>
+              <div className="ocr-result" style={{ marginTop: '1rem' }}>
+                <p style={{ fontWeight: 600 }}>{ocrText(ocrResult.match)}</p>
                 {ocrResult.differences?.length > 0 && (
                   <ul>
                     {ocrResult.differences.map((difference, index) => (

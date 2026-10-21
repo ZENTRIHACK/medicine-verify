@@ -41,16 +41,61 @@ export default function OcrCheck({ serial, product }) {
       <p className="muted">Take or choose a clear photo of the printed batch and expiry details.</p>
       <form onSubmit={submit}>
         <div className="field">
-          <label htmlFor="pack-photo">Pack photo</label>
-          <input
-            id="pack-photo"
-            type="file"
-            accept="image/*"
-            onChange={(e) => {
-              setFile(e.target.files && e.target.files[0] ? e.target.files[0] : null);
-              setResult(null);
-            }}
-          />
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>Pack photo source</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '0.5rem' }}>
+            <label
+              className="btn"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                cursor: 'pointer',
+                padding: '0.5rem 1rem',
+                borderRadius: '6px'
+              }}
+            >
+              📷 Take Photo
+              <input
+                id="pack-photo-camera"
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={(e) => {
+                  setFile(e.target.files && e.target.files[0] ? e.target.files[0] : null);
+                  setResult(null);
+                }}
+                style={{ display: 'none' }}
+              />
+            </label>
+            <label
+              className="btn secondary"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                cursor: 'pointer',
+                padding: '0.5rem 1rem',
+                borderRadius: '6px'
+              }}
+            >
+              🖼️ Choose from Gallery
+              <input
+                id="pack-photo-gallery"
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  setFile(e.target.files && e.target.files[0] ? e.target.files[0] : null);
+                  setResult(null);
+                }}
+                style={{ display: 'none' }}
+              />
+            </label>
+          </div>
+          {file && (
+            <p style={{ margin: '0.25rem 0', fontSize: '0.875rem', color: '#16a34a', fontWeight: 500 }}>
+              ✓ Selected photo: {file.name}
+            </p>
+          )}
         </div>
 
         {USE_MOCKS && (

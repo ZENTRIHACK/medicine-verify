@@ -882,7 +882,8 @@ app.post(
     try {
       fields = await integrations.ocr.extractPackFields(
         req.file.buffer,
-        req.file.mimetype
+        req.file.mimetype,
+        batch
       );
     } catch (err) {
       console.error("OCR integration failed:", err);

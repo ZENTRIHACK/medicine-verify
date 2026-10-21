@@ -64,65 +64,51 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard-wrapper">
-      <header
-        className="sticky-top-nav"
-        style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 1000,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0.85rem 1.5rem',
-          backgroundColor: '#ffffff',
-          borderBottom: '1px solid #e2e8f0',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-          <span className="brand-logo" style={{ fontWeight: 800, letterSpacing: '0.05em', color: '#0284c7' }}>
-            ZENTRIQ
-          </span>
-          <span style={{ color: '#cbd5e1' }}>|</span>
-          <strong className="actor-name" style={{ fontSize: '1rem', color: '#0f172a' }}>
-            {actor.name}
-          </strong>
-          <span
-            className="role-badge"
-            style={{
-              textTransform: 'capitalize',
-              padding: '0.2rem 0.6rem',
-              borderRadius: '9999px',
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              backgroundColor: '#e0f2fe',
-              color: '#0369a1'
-            }}
-          >
-            {actor.role}
-          </span>
-          {actor.place && (
-            <span className="actor-place" style={{ fontSize: '0.85rem', color: '#64748b' }}>
-              📍 {actor.place}
+      <header className="sticky top-0 z-50 flex items-center justify-between border-b border-[#E9E5F1] bg-white/95 px-4 py-3.5 backdrop-blur shadow-sm sm:px-6 sticky-top-nav">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#28145F] text-xs font-black text-white shadow-sm">
+              ZV
             </span>
-          )}
+            <span className="brand-logo text-base sm:text-lg font-black tracking-tight text-[#242039]">
+              ZENTRIQ
+            </span>
+          </div>
+          <span className="hidden sm:inline text-[#CBD5E1]">|</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <strong className="actor-name text-sm font-bold text-[#242039]">
+              {actor.name}
+            </strong>
+            <span
+              className={`role-badge rounded-full px-2.5 py-0.5 text-xs font-bold capitalize ${
+                actor.role === 'manufacturer'
+                  ? 'bg-purple-100 text-[#4926C8]'
+                  : actor.role === 'distributor'
+                  ? 'bg-sky-100 text-[#0369A1]'
+                  : actor.role === 'pharmacy'
+                  ? 'bg-emerald-100 text-[#15803D]'
+                  : 'bg-amber-100 text-[#B45309]'
+              }`}
+            >
+              {actor.role}
+            </span>
+            {actor.place && (
+              <span className="actor-place flex items-center gap-1 text-xs text-gray-500">
+                <span>📍</span> {actor.place}
+              </span>
+            )}
+          </div>
         </div>
         <button
           type="button"
-          className="btn btn-secondary logout-btn"
           onClick={handleLogout}
-          style={{
-            padding: '0.4rem 0.85rem',
-            fontSize: '0.85rem',
-            borderRadius: '6px',
-            cursor: 'pointer'
-          }}
+          className="logout-btn inline-flex items-center gap-1.5 rounded-xl border border-[#E5E1EF] px-3.5 py-2 text-xs font-bold text-gray-600 transition hover:bg-gray-100 hover:text-[#242039]"
         >
           Logout
         </button>
       </header>
 
-      <main className="dashboard-main-content" style={{ padding: '1.5rem', maxWidth: '1200px', margin: '0 auto' }}>
+      <main className="dashboard-main-content">
         {renderRoleDashboard()}
       </main>
     </div>
