@@ -82,7 +82,10 @@ async function request(path, { method = 'GET', body, form } = {}) {
   if (!res.ok) {
     // A dispense conflict may arrive with an error status; it is still a result.
     if (data && data.result === 'conflict') return data;
-    throw Object.assign(new Error(`Request failed (${res.status})`), { status: res.status });
+    throw Object.assign(
+      new Error(data?.message || `Request failed (${res.status})`),
+      { status: res.status, data }
+    );
   }
   return data;
 }

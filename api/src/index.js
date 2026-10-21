@@ -106,6 +106,58 @@ function recordAlert(serial, type, details = null) {
   ).run(serial, type, new Date().toISOString(), details);
 }
 
+function findBatchByNumber(batchNo) {
+  return db
+    .prepare(`
+      SELECT id, productName, batchNo
+      FROM batches
+      WHERE batchNo COLLATE NOCASE = ?
+      LIMIT 1
+    `)
+    .get(batchNo);
+}
+
+function firstSerialForBatch(batchId) {
+  const row = db
+    .prepare(`
+      SELECT serial
+      FROM packs
+      WHERE batchId = ?
+      ORDER BY rowid ASC
+      LIMIT 1
+    `)
+    .get(batchId);
+
+  return row ? row.serial : null;
+}
+
+function rejectDuplicateBatch(res, existing, attemptedProduct) {
+  const message =
+    `Batch number ${existing.batchNo} is already registered for ` +
+    `${existing.productName} (batch #${existing.id}). Registration for ` +
+    `${attemptedProduct} was blocked and the regulator alert feed was notified.`;
+
+  recordAlert(
+    firstSerialForBatch(existing.id),
+    "duplicate_batch",
+    message
+  );
+
+  return sendError(
+    res,
+    409,
+    "duplicate_batch",
+    message,
+    {
+      existingBatch: {
+        id: existing.id,
+        productName: existing.productName,
+        batchNo: existing.batchNo
+      }
+    }
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* Authentication                                                             */
 /* -------------------------------------------------------------------------- */
@@ -248,6 +300,16 @@ app.post("/api/batches", requireAuth, async (req, res) => {
     );
   }
 
+  const existingBatch = findBatchByNumber(cleanBatchNo);
+
+  if (existingBatch) {
+    return rejectDuplicateBatch(
+      res,
+      existingBatch,
+      cleanProductName
+    );
+  }
+
   const serials = [];
 
   for (let i = 0; i < parsedQuantity; i += 1) {
@@ -312,6 +374,14 @@ app.post("/api/batches", requireAuth, async (req, res) => {
   try {
     registerTransaction();
   } catch (err) {
+    if (String(err.code).startsWith("SQLITE_CONSTRAINT")) {
+      const existing = findBatchByNumber(cleanBatchNo);
+
+      if (existing) {
+        return rejectDuplicateBatch(res, existing, cleanProductName);
+      }
+    }
+
     console.error("Batch registration failed:", err);
 
     return sendError(
@@ -793,6 +863,12 @@ app.get("/api/verify/:serial", (req, res) => {
     flags.push("A custody mismatch was recorded.");
   }
 
+  if (alerts.some(alert => alert.type === "duplicate_batch")) {
+    flags.push(
+      "A duplicate batch registration attempt was blocked for this batch."
+    );
+  }
+
   let derivedStatus = "unknown";
 
   if (alerts.some(alert => alert.type === "double_dispense")) {
@@ -1122,10 +1198,15 @@ app.use((err, req, res, next) => {
 /* Start server                                                               */
 /* -------------------------------------------------------------------------- */
 
-const PORT = process.env.PORT || 3001;
+const configuredPort = process.env.PORT ? Number(process.env.PORT) : NaN;
+const PORT = Number.isInteger(configuredPort) ? configuredPort : 3001;
 
-app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+const server = app.listen(PORT, () => {
+  const address = server.address();
+  const activePort =
+    address && typeof address === "object" ? address.port : PORT;
+
+  console.log(`Server listening on port ${activePort}`);
 });
 
 console.log(

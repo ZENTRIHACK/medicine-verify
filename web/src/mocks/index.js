@@ -77,11 +77,37 @@ export const mockApi = {
     const db = load();
     const actor = requireRole(db, token, 'manufacturer');
     const qty = Number(quantity);
-    if (!productName || !batchNo || !expiry || !Number.isInteger(qty) || qty < 1 || qty > 500) {
+    const cleanProductName = String(productName || '').trim();
+    const cleanBatchNo = String(batchNo || '').trim();
+    const cleanExpiry = String(expiry || '').trim();
+    if (!cleanProductName || !cleanBatchNo || !cleanExpiry || !Number.isInteger(qty) || qty < 1 || qty > 500) {
       throw httpError(400, 'Check the batch details.');
     }
+
+    const duplicate = db.batches.find(
+      (b) => String(b.batchNo || '').trim().toLowerCase() === cleanBatchNo.toLowerCase()
+    );
+    if (duplicate) {
+      const message =
+        `Batch number ${duplicate.batchNo} is already registered for ` +
+        `${duplicate.productName} (batch #${duplicate.batchId}). Registration for ` +
+        `${cleanProductName} was blocked and the regulator alert feed was notified.`;
+      const existingPack = Object.values(db.serials).find(
+        (record) => record.batchId === duplicate.batchId
+      );
+      db.alerts.push({
+        id: db.nextAlertId++,
+        serial: existingPack ? existingPack.serial : null,
+        type: 'duplicate_batch',
+        at: new Date().toISOString(),
+        details: message,
+      });
+      save(db);
+      throw httpError(409, message);
+    }
+
     const batchId = db.nextBatchId++;
-    db.batches.push({ batchId, productName, batchNo, expiry });
+    db.batches.push({ batchId, productName: cleanProductName, batchNo: cleanBatchNo, expiry: cleanExpiry });
     const serials = [];
     for (let i = 0; i < qty; i++) {
       const serial = makeSerial(db.serials);
@@ -162,13 +188,20 @@ export const mockApi = {
       return { serial, status: 'unknown', product: null, currentHolder: null, trail: [], flags: [] };
     }
     const holder = db.actors.find((a) => a.id === rec.holderId);
+    const flags = [...rec.flags];
+    const duplicateBlocked = db.alerts.some(
+      (alert) => alert.type === 'duplicate_batch' && alert.serial === serial
+    );
+    if (duplicateBlocked && !flags.includes('duplicate_batch')) {
+      flags.push('duplicate_batch');
+    }
     return {
       serial,
       status: rec.status,
       product: productOf(db, rec),
       currentHolder: { id: holder.id, name: holder.name, role: holder.role },
       trail: rec.trail,
-      flags: rec.flags,
+      flags,
     };
   },
 
