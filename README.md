@@ -1426,3 +1426,16 @@ These are real behaviors of the current branch, documented so operators do not h
 - [ ] Run the smoke sequence against the deployed API.
 - [ ] Verify `/v/<serial>` survives a direct browser reload through the Vercel SPA rewrite.
 
+
+
+---
+
+## 👥 Authors
+- **Daniel Maina** – DevOps Engineer
+- **Linkoln tuhoto** – Full Stack Developer
+- **Maurice kabubu** – Backend Engineer
+- **Edward** – Cybersecurity Analyst and Red Team
+
+## 📄 Copyright & License
+Copyright © 2026 Daniel Maina, Linkoln tuhoto, Maurice kabubu, and Edward. All rights reserved. 
+*(Do not change these names or titles under any circumstances).*
