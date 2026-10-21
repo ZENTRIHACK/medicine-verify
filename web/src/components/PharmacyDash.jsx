@@ -4,14 +4,6 @@ import strings from '../strings.json'
 
 /**
  * Releases a camera scanner without ever throwing.
- *
- * html5-qrcode's stop() is asynchronous but clear() is synchronous, and clear()
- * throws the string "Cannot clear while scan is ongoing, close it first." if it
- * runs while the scan is still live. Calling clear() immediately after an
- * un-awaited stop() therefore throws inside the React cleanup, the camera is
- * never released, and the video indicator stays on. stop() is awaited first,
- * and both calls are guarded so neither a rejected promise nor a synchronous
- * throw can escape.
  */
 async function releaseScanner(scanner) {
   if (!scanner) return;
@@ -22,9 +14,9 @@ async function releaseScanner(scanner) {
   }
   try {
     const cleared = scanner.clear();
-    if (cleared && typeof cleared.catch === 'function') await cleared;
-  } catch {
-    /* viewport already cleared */
+    if (cleared && typeof cleared.catch === 'function') await cleared.catch(console.error);
+  } catch (err) {
+    console.error(err);
   }
 }
 
@@ -38,8 +30,14 @@ export default function PharmacyDash({ actor }) {
 
   useEffect(() => {
     return () => {
-      void releaseScanner(scannerRef.current);
+      const scanner = scannerRef.current;
       scannerRef.current = null;
+      if (scanner) {
+        if (scanner.isScanning) {
+          scanner.stop().then(() => scanner.clear().catch(console.error)).catch(console.error);
+        }
+        return scanner.clear().catch(console.error);
+      }
     };
   }, []);
 
@@ -57,6 +55,15 @@ export default function PharmacyDash({ actor }) {
     // dynamic import to avoid SSR issues
     const { Html5Qrcode } = await import('html5-qrcode');
     const scanner = new Html5Qrcode('pharmacy-qr-reader');
+    const origClear = scanner.clear.bind(scanner);
+    scanner.clear = () => {
+      try {
+        const res = origClear();
+        return Promise.resolve(res);
+      } catch (err) {
+        return Promise.reject(err);
+      }
+    };
     scannerRef.current = scanner;
 
     try {
@@ -164,8 +171,8 @@ export default function PharmacyDash({ actor }) {
         <div className="banner banner-danger" style={{ marginTop: '1rem' }}>
           ⚠ {strings.status.conflict}
           <div className="conflict-details">
-            <p>Previously dispensed by: <strong>{result.conflictWith.actorName}</strong></p>
-            <p>At: {new Date(result.conflictWith.at).toLocaleString()}</p>
+            <p>Previously dispensed by: <strong>{result.conflictWith?.actorName || 'Unknown'}</strong></p>
+            <p>At: {result.conflictWith?.at ? new Date(result.conflictWith.at).toLocaleString() : 'Unknown'}</p>
           </div>
           {result.flags && result.flags.length > 0 && (
             <ul className="flag-list" style={{ marginTop: '0.5rem' }}>

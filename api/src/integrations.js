@@ -1,5 +1,5 @@
 const chainMode = process.env.CHAIN_MODE === 'real';
-const ocrMode = process.env.OCR_MODE === 'real';
+const ocrMode = process.env.OCR_MODE !== 'stub';
 
 module.exports = {
   chain: chainMode ? require('../../chain/wrapper') : require('./stubs/chain'),

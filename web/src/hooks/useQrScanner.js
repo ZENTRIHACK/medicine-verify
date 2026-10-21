@@ -33,13 +33,6 @@ function messageForError(error) {
 
 /**
  * Releases a scanner instance.
- *
- * `Html5Qrcode#stop()` is always promise-based, but `clear()` is NOT: in
- * html5-qrcode 2.3.8 `clear()` is synchronous, returns `undefined`, and throws
- * a bare string when the scan is still running. Attaching `.catch()` to its
- * return value therefore raises a TypeError and takes the React cleanup down
- * with it, which is exactly the failure mode that wedges the camera. Only
- * attach a rejection handler when a thenable is actually returned.
  */
 function releaseScanner(scanner) {
   if (!scanner) return Promise.resolve();
@@ -107,6 +100,15 @@ export default function useQrScanner(elementId, onScan) {
 
       try {
         scanner = new Html5Qrcode(elementId);
+        const origClear = scanner.clear.bind(scanner);
+        scanner.clear = () => {
+          try {
+            const res = origClear();
+            return Promise.resolve(res);
+          } catch (err) {
+            return Promise.reject(err);
+          }
+        };
       } catch (error) {
         console.error('[scanner] init failed:', error);
         notify(new Error(messageForError(error)));
@@ -141,6 +143,9 @@ export default function useQrScanner(elementId, onScan) {
       const instance = scannerRef.current || scanner;
       scannerRef.current = null;
       void serializedTeardown(elementId, instance);
+      if (instance) {
+        return instance.clear().catch(console.error);
+      }
     };
   }, [elementId]);
 }

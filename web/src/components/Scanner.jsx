@@ -15,6 +15,16 @@ export default function Scanner({ onScan }) {
   useEffect(() => {
     if (!active) return undefined;
     const scanner = new Html5Qrcode(elementId.current);
+    const origClear = scanner.clear.bind(scanner);
+    scanner.clear = () => {
+      try {
+        const res = origClear();
+        return Promise.resolve(res);
+      } catch (err) {
+        return Promise.reject(err);
+      }
+    };
+
     let startPromise;
     try {
       startPromise = scanner.start(
@@ -37,8 +47,9 @@ export default function Scanner({ onScan }) {
     return () => {
       startPromise
         .then(() => scanner.stop())
-        .then(() => scanner.clear())
-        .catch(() => {});
+        .then(() => scanner.clear().catch(console.error))
+        .catch(() => scanner.clear().catch(console.error));
+      return scanner.clear().catch(console.error);
     };
   }, [active]);
 
