@@ -214,32 +214,32 @@ export default function PharmacyDash({ actor }) {
         </span>
       </div>
 
-      {/* Hero Section */}
-      <section className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 md:p-8 backdrop-blur-xl shadow-2xl mb-8">
+      {/* Hero Header — Bright Clinical Blue */}
+      <section className="bg-slate-900 border border-blue-500/40 rounded-2xl p-6 md:p-8 shadow-xl shadow-blue-500/10 mb-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div>
-            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-sky-500/15 text-sky-400 border border-sky-500/30 uppercase tracking-wider mb-3">
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-blue-600 text-white tracking-wider uppercase mb-3 shadow-md shadow-blue-600/20">
               LAST-MILE DISPENSING
             </span>
             <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight mb-2">
               Pharmacy portal
             </h1>
-            <p className="text-slate-400 text-sm md:text-base max-w-2xl">
+            <p className="text-slate-300 text-sm md:text-base max-w-2xl">
               Record pharmacy stock receipt and dispensing events so a pack&apos;s journey can be reviewed later.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 text-slate-300 border border-slate-700/50">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-950/70 text-blue-300 border border-blue-500/30">
                 Traceable pack records
               </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 text-slate-300 border border-slate-700/50">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-950/70 text-blue-300 border border-blue-500/30">
                 Double-dispense prevention
               </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 text-slate-300 border border-slate-700/50">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-950/70 text-blue-300 border border-blue-500/30">
                 Point-of-sale verification
               </span>
             </div>
           </div>
-          <div className="flex h-20 w-20 md:h-24 md:w-24 shrink-0 items-center justify-center rounded-2xl border border-slate-700/50 bg-slate-800/50 shadow-inner">
+          <div className="flex h-20 w-20 md:h-24 md:w-24 shrink-0 items-center justify-center rounded-2xl border border-blue-500/30 bg-blue-950/40 shadow-inner">
             <Store size={40} className="text-blue-400" />
           </div>
         </div>

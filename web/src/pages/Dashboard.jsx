@@ -98,7 +98,7 @@ export default function Dashboard() {
         <button
           type="button"
           onClick={handleLogout}
-          className="logout-btn inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs sm:text-sm font-semibold text-rose-400 border border-rose-500/20 bg-rose-500/10 transition-all hover:bg-rose-500/20 cursor-pointer shrink-0"
+          className="logout-btn inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-4 py-2 text-xs sm:text-sm font-semibold text-rose-400 border border-rose-500/20 bg-rose-500/10 transition-all hover:bg-rose-500/20 cursor-pointer"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
