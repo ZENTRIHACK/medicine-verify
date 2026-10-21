@@ -6,7 +6,7 @@
 
 Registry-backed serials · custody trails · duplicate-dispense detection · packaging OCR · optional EVM audit anchor
 
-[Overview](#1-executive-summary--core-concept) · [Architecture](#2-system-architecture) · [Roles](#3-role--permission-venn--flow) · [Security](#4-cryptographic-security--red-team-defenses) · [Run](#5-local-setup--deployment) · [Authors](#6-authors--copyright)
+[Overview](#1-executive-summary--core-concept) · [Architecture](#2-system-architecture) · [Roles](#3-role--permission-venn--flow) · [Security](#4-cryptographic-security--red-team-defenses) · [Run](#5-local-setup--deployment) · [Authors](#-authors) · [Copyright](#-copyright--license)
 
 </div>
 
@@ -31,23 +31,23 @@ ZENTRIQ answers those questions with a small, inspectable system: a React verifi
 
 ### 1.2 How it works
 
-```text
-Manufacturer                Distributor                 Pharmacy                 Public / Regulator
-    │                            │                         │                            │
-    ├─ register batch ───────────►                            │                            │
-    ├─ generate 16-char serials  │                         │                            │
-    ├─ transfer custody ────────►                            │                            │
-    │                            ├─ receive custody         │                            │
-    │                            ├─ transfer custody ──────►│                            │
-    │                            │                         ├─ verify serial             │
-    │                            │                         ├─ dispense (or conflict)    │
-    │                            │                         │                            │
-    └────────────────────────────┴─────────────────────────┴─ append event + alert ────►│
-                                                                                         │
-                                              public verification + custody trail ◄──────┘
+```mermaid
+flowchart TD
+  A["Manufacturer registers a batch"] --> B{"Batch number already registered?"}
+  B -->|"Yes"| X["409 duplicate_batch<br/>Regulator alert raised"]
+  B -->|"No"| C["API creates one 16-character serial per pack"]
+  C --> D["Manufacturer transfers custody"]
+  D --> E["Distributor receives and forwards"]
+  E --> F["Pharmacy dispenses"]
+  F --> G{"Already dispensed?"}
+  G -->|"No"| H["Dispensed event<br/>public trail updated"]
+  G -->|"Yes"| I["Conflict event<br/>double_dispense alert"]
+  I --> J["Regulator dashboard"]
+  H --> K["Public verifier reads the record"]
+  I --> K
 ```
 
-1. A **manufacturer** registers a batch and defines its product name, batch number, expiry, and quantity.
+1. A **manufacturer** registers a batch and defines its product name, batch number, expiry, and quantity. A batch number that already exists is rejected with `409 duplicate_batch`, and the regulator alert feed is notified.
 2. The API creates one **16-character pack serial** per unit and records a `registered` event.
 3. A **custodian** transfers serials to a distributor or pharmacy; each transfer updates `currentHolderId` and appends a `transferred` event.
 4. A **pharmacy** records a `dispensed` event. A repeat attempt is recorded as a conflict and raises a regulator alert.
@@ -60,7 +60,7 @@ Manufacturer                Distributor                 Pharmacy                
 | Whether a serial has a registry record | Whether the medicine inside the pack has the labelled composition |
 | The registered product, batch, and expiry | Whether the pack was physically produced by the named manufacturer |
 | The current custodian and the recorded event trail | Whether a photograph or QR label has been copied from another pack |
-| Whether a duplicate dispensing attempt was recorded | Whether a distributor or pharmacy is licensed in the real world |
+| Whether a duplicate batch number or dispensing attempt was blocked | Whether a distributor or pharmacy is licensed in the real world |
 | Whether readable batch and expiry text match the registry | Whether a pack has been stored under correct temperature conditions |
 | Whether a serial is registered but has no custody movement yet | Whether the supply chain actor is who they claim to be beyond the demo session |
 
@@ -113,57 +113,27 @@ The four session-gated personas map to `actors.role`. The public verifier has no
 ### 2.1 Topology
 
 ```mermaid
-graph TD
-  subgraph Browser["Browser boundary"]
-    UI["React 18 SPA<br/>Vite 5 build"]
-    ROUTER["React Router 6<br/>/login · /dashboard · /v/:serial"]
-    SCANNER["html5-qrcode<br/>camera + gallery decode"]
-    PHOTO["Pack photo upload<br/>JPG / PNG / WebP"]
-    MOCK["Mock API<br/>localStorage zentriq_mock_db_v1"]
-  end
+flowchart LR
+  EDGE["Vercel<br/>React SPA + SPA rewrites"]
+  UI["Browser<br/>React 18 + Vite 5"]
+  MOCK["Mock API<br/>localStorage"]
+  API["Fly.io machine<br/>Express API + SQLite volume"]
+  MODE{"Adapter selector"}
+  OCR["Tesseract.js<br/>eng worker"]
+  OCRSTUB["OCR stub"]
+  CHAIN["chain/wrapper.js<br/>ethers v6"]
+  CHAINSTUB["Chain stub<br/>random tx hashes"]
+  EVM[("PackRegistry.sol<br/>Hardhat JSON-RPC")]
 
-  subgraph Hosting["Hosted runtime"]
-    VERCEL["Vercel static hosting<br/>web/vercel.json SPA rewrites"]
-    FLY["Fly.io machine<br/>api/Dockerfile"]
-    VOL[("/data volume<br/>prod.db")]
-  end
-
-  subgraph Service["Node service"]
-    API["Express API<br/>api/src/index.js"]
-    AUTH["requireAuth<br/>Bearer token lookup"]
-    INT["integrations.js<br/>runtime adapters"]
-    TX["better-sqlite3<br/>synchronous transactions"]
-  end
-
-  subgraph Data["State and external adapters"]
-    DB[("SQLite registry<br/>actors · batches · packs · events · alerts")]
-    OCR["Tesseract.js<br/>eng worker"]
-    OCRSTUB["OCR stub"]
-    CHAIN["chain/wrapper.js<br/>ethers v6"]
-    CHAINSTUB["Chain stub<br/>random 32-byte tx hashes"]
-    EVM[("PackRegistry.sol<br/>Hardhat JSON-RPC")]
-  end
-
-  VERCEL --> UI
-  UI --> ROUTER
-  UI --> SCANNER
-  UI --> PHOTO
+  EDGE -->|"serves"| UI
   UI -->|"VITE_USE_MOCKS=true"| MOCK
-  UI -->|"VITE_USE_MOCKS=false<br/>/api/* via Vite proxy or VITE_API_URL"| API
-  FLY --> API
-  API --> AUTH
-  AUTH --> DB
-  API --> TX
-  TX --> DB
-  DB --> VOL
-  API --> INT
-  INT -->|"OCR_MODE=stub"| OCRSTUB
-  INT -->|"any other OCR_MODE"| OCR
-  INT -->|"CHAIN_MODE=real"| CHAIN
-  INT -->|"all other CHAIN_MODE values"| CHAINSTUB
-  PHOTO --> API
+  UI -->|"VITE_USE_MOCKS=false<br/>/api/*"| API
+  API --> MODE
+  MODE -->|"OCR_MODE=stub"| OCRSTUB
+  MODE -->|"any other OCR_MODE"| OCR
+  MODE -->|"CHAIN_MODE=real"| CHAIN
+  MODE -->|"all other CHAIN_MODE"| CHAINSTUB
   CHAIN --> EVM
-  OCR --> DB
 ```
 
 **Operational reading of the diagram**
@@ -180,7 +150,7 @@ graph TD
 | --- | --- | --- |
 | Verification portal | `web/` | Login, role dashboards, QR scanning, public verification, OCR upload, mock API. |
 | HTTP API | `api/src/index.js` | Session lookup, batch registration, custody transfer, dispensing, public verification, OCR upload, alerts, error handling. |
-| Schema and seed actors | `api/src/schema.js` | Table DDL, table list, six demo actors, first-boot initialization. |
+| Schema and seed actors | `api/src/schema.js` | Table DDL, batch-number unique index, six demo actors, first-boot initialization. |
 | OCR adapter | `api/src/ocr-tesseract.js` | Tesseract worker, text normalization, field extraction, classification, comparison. |
 | Integration selector | `api/src/integrations.js` | Selects chain and OCR adapters from environment variables at module load. |
 | Chain stub | `api/src/stubs/chain.js` | Returns random 32-byte transaction hashes without an EVM node. |
@@ -208,7 +178,7 @@ erDiagram
     BATCHES {
         INTEGER id PK
         TEXT productName
-        TEXT batchNo
+        TEXT batchNo UK
         TEXT expiry
         INTEGER quantity
     }
@@ -245,14 +215,14 @@ erDiagram
     PACKS |o--o{ ALERTS : "serial"
 ```
 
-> **Important:** these are logical relationships. `api/src/schema.js` declares **no `FOREIGN KEY` constraints** and no secondary indexes. The only hard constraints are `actors.id` and `batches.id` primary keys, `packs.serial` primary key, and the two auto-increment event/alert IDs. Referential integrity is maintained by application code.
+> **Important:** these are logical relationships. `api/src/schema.js` declares **no `FOREIGN KEY` constraints**. The hard constraints are the `actors.id` and `batches.id` primary keys, the `packs.serial` primary key, the two auto-increment event/alert IDs, and a case-insensitive unique index on `batches.batchNo`. There are no other secondary indexes, so referential integrity is maintained by application code.
 
 #### Table reference
 
 | Table | Key fields | Purpose |
 | --- | --- | --- |
 | `actors` | `id`, `username`, `role`, `name`, `place`, `address`, `token` | Demo supply-chain organisations and their current session token. |
-| `batches` | `id`, `productName`, `batchNo`, `expiry`, `quantity` | Registered batch metadata. There is no manufacturer column. |
+| `batches` | `id`, `productName`, `batchNo`, `expiry`, `quantity` | Registered batch metadata. `batchNo` has a case-insensitive unique index. There is no manufacturer column. |
 | `packs` | `serial`, `batchId`, `status`, `currentHolderId` | One row per physical pack identity. `serial` is the human-readable 16-character identifier. |
 | `events` | `packSerial`, `type`, `actorId`, `at`, `txHash`, `details` | Append-only trail for registration, transfer, dispensing, and conflict events. |
 | `alerts` | `serial`, `type`, `at`, `details` | Regulator-facing risk records. |
@@ -274,6 +244,7 @@ erDiagram
 | `custody_mismatch` | A pharmacy attempts to dispense a pack it does not currently hold. | `null` |
 | `double_dispense` | The current holder attempts a second dispense. | `null` |
 | `ocr_mismatch` | OCR comparison returns `mismatch`. | JSON containing `differences`. |
+| `duplicate_batch` | A manufacturer attempts to register an existing batch number. | Human-readable message naming the existing product/batch and the blocked attempt; `serial` points at the existing batch’s first pack when available. |
 
 #### Status derivation on public verification
 
@@ -294,7 +265,7 @@ All responses are JSON except the OCR request, which is multipart. The API enabl
 | Method | Path | Session | Request | Success | Main failures |
 | --- | --- | --- | --- | --- | --- |
 | `POST` | `/api/login` | Public | `{ username }` | `200 { token, actor }` | `400` missing username; `401` unknown user |
-| `POST` | `/api/batches` | Bearer | `{ productName, batchNo, expiry, quantity }` | `201 { batchId, serials[] }` | `400` validation; `403` not manufacturer; `500` database error |
+| `POST` | `/api/batches` | Bearer | `{ productName, batchNo, expiry, quantity }` | `201 { batchId, serials[] }` | `400` validation; `403` not manufacturer; `409` duplicate batch number; `500` database error |
 | `POST` | `/api/custody/transfer` | Bearer | `{ serials[], toActorId }` | `200 { ok, transferred, txHashes[] }` | `400` validation/self-transfer; `403` not holder; `404` unknown serial; `409` already dispensed |
 | `POST` | `/api/dispense` | Bearer | `{ serial }` | `200 { result: "ok", txHash, flags }` | `400` missing serial; `403` not pharmacy; `404` unknown serial; `409` blocked/conflict |
 | `GET` | `/api/verify/:serial` | Public | Path parameter | `200` record or unknown record | `400` empty serial |
@@ -322,6 +293,7 @@ All responses are JSON except the OCR request, which is multipart. The API enabl
 
 | Input | Bound |
 | --- | --- |
+| Batch number | Non-empty after trim; compared case-insensitively; duplicate returns `409 duplicate_batch` |
 | Batch quantity | Whole number from `1` to `10000` |
 | Transfer batch | `1` to `500` serials; no duplicate strings; no empty strings |
 | Transfer recipient | Existing actor whose role is `distributor` or `pharmacy`; not the sender |
@@ -415,24 +387,21 @@ The transfer write is a single `db.transaction()`: it updates `currentHolderId`,
 ### 2.7 OCR pipeline
 
 ```mermaid
-flowchart TD
-    A["Multipart upload<br/>serial + one image"] --> B{"MIME in allowlist and<br/>size at most 8 MiB?"}
-    B -->|No| E1["400 bad_request<br/>or 415 unsupported_image_type"]
-    B -->|Yes| C["Parse serial"]
-    C --> D{"packs + batches<br/>record exists?"}
-    D -->|No| E2["404 unknown_serial"]
-    D -->|Yes| F["integrations.ocr.extractPackFields()"]
-    F --> G["Tesseract.js eng worker<br/>normalize text"]
-    G --> H["Extract batch number<br/>expiry + manufacturer"]
-    H --> I{"isMedicinePackage === true?"}
-    I -->|false| E3["422 not_medicine"]
-    I -->|missing / uncertain| E4["422 image_unclassified"]
-    I -->|true| J["comparePack(fields, batch)"]
-    J --> K{"comparison.match"}
-    K -->|mismatch| L["Record ocr_mismatch alert"]
-    K -->|match| M["200 record match"]
-    K -->|unreadable| E5["422 unreadable"]
-    K -->|not_medicine| E6["422 not_medicine"]
+flowchart LR
+  A["Upload<br/>serial + image"] --> B{"Valid file?"}
+  B -->|"No"| E1["400 bad_request<br/>or 415 unsupported_image_type"]
+  B -->|"Yes"| D{"Registered serial?"}
+  D -->|"No"| E2["404 unknown_serial"]
+  D -->|"Yes"| F["extractPackFields()"]
+  F --> G["Tesseract text<br/>batch + expiry + manufacturer"]
+  G --> H{"Medicine package?"}
+  H -->|"No"| E3["422 not_medicine"]
+  H -->|"Uncertain"| E4["422 image_unclassified"]
+  H -->|"Yes"| I["comparePack()"]
+  I -->|"match"| OK["200 record match"]
+  I -->|"mismatch"| ALERT["Record ocr_mismatch alert"]
+  I -->|"unreadable"| E5["422 unreadable"]
+  I -->|"not_medicine"| E6["422 not_medicine"]
 ```
 
 **Extraction details**
@@ -461,14 +430,16 @@ flowchart TD
 The Solidity contract is a **relayer-controlled mirror**:
 
 ```mermaid
-graph LR
-    API["API process"] --> W["chain/wrapper.js<br/>ethers v6"]
-    W --> P["JsonRpcProvider<br/>RPC_URL"]
-    P --> S["Unlocked signer<br/>provider.getSigner()"]
-    S --> R["PackRegistry.sol"]
-    R --> A["roles[address]"]
-    R --> K["packs[bytes32 serialHash]"]
-    R --> E["PackRegistered / Transferred / Dispensed / ConflictFlagged"]
+flowchart TB
+  DB[("SQLite<br/>source of truth")] --> API["Express API"]
+  API -->|"post-commit, best effort"| W["chain/wrapper.js"]
+  W --> P["JsonRpcProvider<br/>RPC_URL"]
+  P --> S["Unlocked signer<br/>provider.getSigner()"]
+  S --> R["PackRegistry.sol"]
+  R --> A["roles[address]"]
+  R --> K["packs[bytes32 serialHash]"]
+  R --> E["PackRegistered / Transferred /<br/>Dispensed / ConflictFlagged"]
+  W -.->|"RPC error or revert"| F["Log only<br/>no SQLite rollback"]
 ```
 
 | Contract feature | Behavior |
@@ -544,6 +515,7 @@ The mock is a UI demo, not an authorization emulator. These differences are inte
 | Login matching | Exact username after trim. | Lowercased lookup against `DEMO_USERNAMES`. |
 | Batch quantity | `1..10000`. | `1..500`. |
 | Batch role | Manufacturer only. | Manufacturer only. |
+| Duplicate batch number | Rejected with `409 duplicate_batch`; regulator alert written; case-insensitive match. | Rejected with `409`; regulator alert written; case-insensitive match. |
 | Transfer sender role | Not checked; sender must currently hold each serial. | Only a valid session is checked; no holder or sender-role check. |
 | Transfer recipient | Must be distributor/pharmacy and not self. | Any existing actor; no role or self check. |
 | Transfer result | Errors for unknown/not-held/dispensed serials. | Silently skips unknown, dispensed, or conflict records. |
@@ -584,6 +556,7 @@ medicine-verify/
 | How is login handled? | `api/src/index.js` → `POST /api/login`, `requireAuth` |
 | How is custody transferred? | `api/src/index.js` → `POST /api/custody/transfer` |
 | How is a conflict detected? | `api/src/index.js` → `POST /api/dispense`, `GET /api/verify/:serial` |
+| How is a duplicate batch blocked? | `api/src/index.js` → `POST /api/batches`, `rejectDuplicateBatch()`; `api/src/schema.js` → unique `batchNo` index |
 | How is OCR classified? | `api/src/ocr-tesseract.js` → `classifyMedicinePackage()` |
 | How are fields compared? | `api/src/ocr-tesseract.js` → `comparePack()` |
 | What tables exist? | `api/src/schema.js` |
@@ -602,25 +575,15 @@ medicine-verify/
 
 ```mermaid
 flowchart LR
-    V["Public verifier<br/>no session"]
-    M["Manufacturer<br/>origin + registration"]
-    D["Distributor<br/>movement"]
-    P["Pharmacy<br/>last mile"]
-    R["Regulator<br/>oversight"]
-
-    REG[("Registry<br/>batches · packs · events · alerts")]
-    OCR["Packaging OCR"]
-
-    M -->|"POST /api/batches"| REG
-    M -->|"transfer to distributor or pharmacy"| REG
-    D -->|"receive custody"| REG
-    D -->|"transfer to pharmacy"| REG
-    P -->|"receive custody"| REG
-    P -->|"POST /api/dispense"| REG
-    R -->|"GET /api/alerts"| REG
-    V -->|"GET /api/verify/:serial"| REG
-    V -->|"POST /api/verify/ocr"| OCR
-    OCR -->|"compare with registered batch"| REG
+  M["Manufacturer"] -->|"register batch"| API["Registry API"]
+  M -->|"transfer custody"| API
+  D["Distributor"] -->|"receive / transfer"| API
+  P["Pharmacy"] -->|"receive / dispense"| API
+  API -->|"alert feed"| R["Regulator"]
+  API -->|"duplicate batch blocked<br/>and alerted"| R
+  API -->|"public record + trail"| V["Public verifier"]
+  V -->|"upload pack photo"| OCR["Packaging OCR"]
+  OCR -->|"field comparison"| API
 ```
 
 ### 3.2 Capability matrix
@@ -658,23 +621,20 @@ The roles overlap in ways that matter for both UX and security review:
 ### 3.4 Pack lifecycle
 
 ```mermaid
-stateDiagram-v2
-    [*] --> registered: batch registered
-    registered --> in_custody: custody transfer
-    in_custody --> in_custody: further transfer
-    in_custody --> dispensed: first dispense
-    dispensed --> conflict: duplicate dispense recorded
-    conflict --> conflict: further duplicate attempts
-
-    note right of conflict
-      Public status is derived from a
-      double_dispense alert. In the real API,
-      packs.status remains dispensed.
-    end note
+flowchart TD
+  NEW(["Batch registration request"]) --> CHECK{"Batch number already registered?"}
+  CHECK -->|"Yes"| BLOCK["409 duplicate_batch<br/>Regulator alert raised"]
+  CHECK -->|"No"| REG["Pack status: registered"]
+  REG -->|"custody transfer"| CUST["Pack status: in_custody"]
+  CUST -->|"further transfer"| CUST
+  CUST -->|"first dispense"| DISP["Pack status: dispensed"]
+  DISP -->|"repeat dispense"| CONFLICT["Public status: conflict<br/>packs.status remains dispensed"]
+  CONFLICT -->|"further attempts"| CONFLICT
 ```
 
 Side paths that do not change the pack state:
 
+- A duplicate batch number produces a `409 duplicate_batch`, a regulator alert, and no new batch or pack state.
 - An unknown serial produces a `404` and an `unknown_serial` alert; no pack state exists.
 - A non-holder dispense attempt produces a `409 blocked` and a `custody_mismatch` alert; the pack state is unchanged.
 - An OCR mismatch produces an `ocr_mismatch` alert; the pack status is unchanged.
@@ -721,7 +681,7 @@ No password is required by design. The API source contains an explicit comment t
 | Manufacturer | Persists created batches and logs in localStorage so a reload can repopulate the transfer form. QR values point at `/v/<serial>`. |
 | Distributor | Camera auto-starts on mount. The queue only accepts 16-character normalized serials. Transfer recipient defaults to actor 3. |
 | Pharmacy | Camera auto-starts. A successful dispense increments a session counter; a conflict opens a blocking modal with the prior dispenser and time. |
-| Regulator | Pulls the alert feed on mount. Alert types are mapped through `web/src/lib/lexicon.js`. |
+| Regulator | Pulls the alert feed on mount and refreshes it every five seconds. Duplicate-batch blocks get a banner and a `duplicate_batch` → “Duplicate batch blocked” table row. |
 | Public | Search/scan/photo. The pack-photo section is always rendered, but an upload is rejected until a current serial has been resolved. |
 
 
@@ -818,6 +778,7 @@ For context, the birthday approximation `N² / (2 × 2⁸⁰)` gives a collision
 | Custody transfer | All `packs` holder/status updates + all `transferred` events | One chain `transfer` per serial | SQLite transaction rolls back on local error. Chain failures are logged per call; local success remains. |
 | First dispense | `packs.status = dispensed` + `dispensed` event | One chain `dispense` call | SQLite transaction rolls back on local error. Chain failure does not undo dispensing. |
 | Duplicate dispense | `conflict` event + `double_dispense` alert | One chain `dispense` call | Conflict transaction rolls back on local error. Chain failure does not remove the conflict record. |
+| Duplicate batch registration | No batch/pack write; one `duplicate_batch` alert | None | Existing batch remains unchanged; the API returns `409` with a clear message. |
 | OCR mismatch | Alert insert only | None | No surrounding transaction; a failure is logged. |
 
 `better-sqlite3` is synchronous. In a single Node process, the check-then-write sequences in transfer and dispense are not interleaved by another request because no `await` occurs between the checks and the transaction. That is the practical race protection. It is **not** a database-enforced compare-and-swap:
@@ -835,8 +796,8 @@ For context, the birthday approximation `N² / (2 × 2⁸⁰)` gives a collision
 | No foreign keys | Orphaned packs, events, or alerts are possible after manual database edits. |
 | `actors.username` is not `UNIQUE` | Duplicate usernames are possible outside the seed path; login uses a single-row lookup. |
 | `actors.token` is not `UNIQUE` or indexed | Shared tokens and slow lookups are possible; the demo seed does not create duplicates. |
-| `batches.batchNo` is not `UNIQUE` | The same batch number can be registered more than once. |
-| No secondary indexes | `events.packSerial` and `alerts.serial` scans grow with table size. |
+| Historical duplicate `batches.batchNo` rows | New duplicates are blocked by the application check and a case-insensitive unique index. Existing duplicate rows must be cleaned manually; index creation is best-effort and logs a warning if it fails. |
+| No other secondary indexes | `events.packSerial` and `alerts.serial` scans grow with table size. |
 | No migrations | Schema changes require manual handling; `ensureInitialized` only checks whether tables exist. |
 | No backup or WAL policy in code | Recovery depends on the deployment’s volume practices. |
 
@@ -887,7 +848,7 @@ On-chain hashes are `keccak256(utf8(serial))` via `ethers.id()`. The contract st
 | --- | --- | --- |
 | SQL injection | All dynamic values use prepared statements and bound parameters. | No raw SQL construction from user input was found in the request paths. |
 | JSON body size | `express.json({ limit: "1mb" })`. | Large batch arrays are bounded by route logic, but string field lengths are not explicitly capped. |
-| Batch fields | `productName`, `batchNo`, and `expiry` must be non-empty strings after trim. | `expiry` is not parsed or validated as a date; any non-empty string is stored. |
+| Batch fields | `productName`, `batchNo`, and `expiry` must be non-empty strings after trim. `batchNo` is checked case-insensitively against existing batches, with a unique index as a second guard. | `expiry` is not parsed or validated as a date; any non-empty string is stored. |
 | Quantity | Whole-number integer from `1` to `10000`. | No per-account quota or total-storage quota. |
 | Transfer serials | Non-empty array, at most 500, unique non-empty strings. | No format check against the 16-character alphabet. |
 | Recipient | Positive whole-number actor ID, existing actor, distributor/pharmacy, not self. | Sender role is not checked. |
@@ -903,6 +864,7 @@ On-chain hashes are `keccak256(utf8(serial))` via `ethers.id()`. The contract st
 | Attack | Attempted path | Current control | Residual risk |
 | --- | --- | --- | --- |
 | **Serial enumeration** | Query `/api/verify/:serial` across the `2⁸⁰` space. | Large encoded space; no useful ordering. | Leaked or printed serials expose holder names, places, and trails; no rate limit. |
+| **Duplicate batch registration** | Resubmit an existing batch number with changed case or whitespace. | Trimmed, case-insensitive lookup, `409 duplicate_batch` response, regulator alert, and a unique index guard. | Historical duplicate rows are not merged automatically; the index is best-effort on an existing database. |
 | **QR/label copying** | Copy a valid QR and printed batch/expiry onto another box. | Registry lookup and OCR field comparison. | The clone can match the record; there is no physical binding or serial-to-QR comparison. |
 | **Token replay** | Use a stolen bearer token from localStorage. | Token is required for gated routes. | No expiry or server logout; token remains valid until replaced/reset. |
 | **Role escalation via API** | Call `/api/batches`, `/api/dispense`, or `/api/alerts` as the wrong role. | Explicit role checks on those routes. | Transfer sender role is not checked; a holder can transfer outside the intended UI path. |
@@ -929,9 +891,9 @@ On-chain hashes are `keccak256(utf8(serial))` via `ethers.id()`. The contract st
 | **P0** | Add API rate limits and per-route quotas for login, public verify, OCR, and alerts. | Public endpoints and CPU-heavy OCR are currently unthrottled. |
 | **P0** | Restrict CORS to known frontend origins; add security headers, CSP, and HSTS at the edge. | `cors()` currently allows every origin. |
 | **P0** | Add image magic-byte checks, dimension limits, decode timeouts, and an OCR work queue. | The current upload path trusts MIME and buffers up to 8 MiB in memory. |
-| **P0** | Add foreign keys, unique constraints, conditional updates, migrations, and a documented backup/restore procedure. | SQLite currently relies on application discipline for integrity. |
+| **P0** | Add foreign keys, remaining unique constraints, conditional updates, migrations, and a documented backup/restore procedure. | SQLite still relies on application discipline for most relationships; only `batchNo` has a unique index. |
 | **P0** | Add an outbox or reconciliation job for chain writes, or remove the chain from the operational path. | Chain failures currently diverge silently from SQLite. |
-| **P0** | Add CI covering API route tests, frontend build, chain tests, and OCR comparison tests. | The API has no automated test suite. |
+| **P0** | Add CI covering API route tests, frontend build, chain tests, and OCR comparison tests. | No GitHub workflow exists; API coverage currently starts with the duplicate-batch regression test. |
 | **P1** | Add a `manufacturer` column to `batches` and enforce manufacturer comparison. | The comparison code supports it, but the registered value is missing. |
 | **P1** | Require actor signatures for chain writes instead of relayer-attested arguments. | On-chain data currently attests to the relayer, not the named actor. |
 | **P1** | Deduplicate alerts and paginate the regulator feed. | Repeated mismatches and a 1000-row cap otherwise hide history. |
@@ -1193,7 +1155,7 @@ The Hardhat suite contains nine tests covering registration, duplicate hashes, r
 | Area | Command | Status |
 | --- | --- | --- |
 | Frontend build | `cd web && npm ci && npm run build` | Produces `web/dist`. No frontend test script exists. |
-| API tests | `cd api && npm test` | Deliberately exits with `Error: no test specified`. There is no automated API suite. |
+| API tests | `cd api && npm ci && npm test` | `node:test` regression covering duplicate-batch rejection and the regulator alert after a pack has moved through custody and dispensing. |
 | Chain tests | `cd chain && npm ci && npm test` | Nine Hardhat tests. Requires the Hardhat toolchain. |
 | OCR comparison tests | `cd ocr && npm ci && npm test` | Sixteen deterministic comparison cases; no API key required. |
 | OCR image evaluation | `cd ocr && npm run test:ocr` | Requires `OCR_API_KEY` and the image manifest under `ocr/test-images/`. |
@@ -1207,12 +1169,13 @@ The frontend build may emit two non-fatal warnings:
 Suggested local verification sequence:
 
 ```bash
-cd web && npm run build
+cd api && npm test
+cd ../web && npm run build
 cd ../chain && npm test
 cd ../ocr && npm test
 ```
 
-For the API, use the smoke sequence in [5.10](#510-smoke-test) because no route-level tests are committed.
+The API suite currently covers the duplicate-batch rejection and regulator-alert path. Use the smoke sequence in [5.10](#510-smoke-test) for the remaining routes.
 
 ### 5.9 Deployment
 
@@ -1305,6 +1268,8 @@ curl -s -X POST http://localhost:3001/api/batches \
   -d '{"productName":"Amoxicillin 500mg Capsules","batchNo":"AMX-2026-014","expiry":"2027-03-31","quantity":2}'
 ```
 
+Repeat the same request with the same `batchNo`. Expect `409` with `"error":"duplicate_batch"` and a message naming the existing batch.
+
 Copy one returned serial into `SERIAL`, then transfer to actor `3` (Mlimani Pharmacy):
 
 ```bash
@@ -1335,6 +1300,17 @@ Verify the public record and trail:
 curl -s "http://localhost:3001/api/verify/$SERIAL"
 ```
 
+Log in as the regulator and confirm the duplicate-batch alert:
+
+```bash
+REGULATOR_TOKEN=$(curl -s -X POST http://localhost:3001/api/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"regulator"}' | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).token')
+
+curl -s http://localhost:3001/api/alerts \
+  -H "Authorization: Bearer $REGULATOR_TOKEN"
+```
+
 Upload a pack photo:
 
 ```bash
@@ -1355,10 +1331,12 @@ A complete demo can run entirely in mock mode.
 4. Open `/v/R4T8V2YC6DJH9PXM`. Show the **Conflict: needs review** banner and the duplicate-dispense flag.
 5. Log in as `regulator`. Show the seeded alert row and its link to the same public record.
 6. Log in as `zenocare`. Register a new batch, show the generated QR cards, and transfer serials to actor `2` (AfyaLink).
-7. Log in as `afyalink`. Add a serial manually or scan it, then dispatch to actor `3` (Mlimani).
-8. Log in as `mlimani`. Dispense that serial; repeat to show the conflict modal. Do not describe the pack as clinically checked.
-9. Return to the public page. Show the updated trail and the registry flags.
-10. If using real Tesseract, upload a readable pack photo and then a deliberately altered-print photo to show `match` versus `mismatch`.
+7. Still in the manufacturer view, submit the same batch number again. Show the clear `409 duplicate_batch` message.
+8. Log in as `regulator`. Show the new “Duplicate batch blocked” alert, including the existing product and blocked attempt.
+9. Log in as `afyalink`. Add a serial manually or scan it, then dispatch to actor `3` (Mlimani).
+10. Log in as `mlimani`. Dispense that serial; repeat to show the conflict modal. Do not describe the pack as clinically checked.
+11. Return to the public page. Show the updated trail and the registry flags.
+12. If using real Tesseract, upload a readable pack photo and then a deliberately altered-print photo to show `match` versus `mismatch`.
 
 Mock OCR caveat: the public page calls `api.verifyOcr(file, serial)`, which delegates to the mock’s default outcome (`match`) and does not expose an outcome selector. To demonstrate `mismatch` or `unreadable` in mock mode, call `mockApi.ocr(serial, file, 'mismatch')` from a custom harness, or use the real Tesseract path with prepared images.
 
@@ -1373,6 +1351,7 @@ The clearest demo sentence is the product’s own scope statement: **the check c
 | API ignores `api/.env` | The API never calls `dotenv.config()`. | Export variables in the shell or start with `node --env-file=.env src/index.js`. |
 | `401 unauthorized` after a reset | The database was recreated and old tokens are gone. | Log in again. |
 | `404 unknown_serial` for a visible serial | Serial case or whitespace differs. | Send the exact uppercase serial; the server only trims, it does not uppercase. |
+| `409 duplicate_batch` on registration | The batch number already exists, including case/whitespace variants. | Open the regulator alert feed to confirm the blocked attempt; use a new batch number. |
 | `npm run seed` fails with a primary-key error | The actors already exist. | Use `npm run reset` on a disposable demo database. |
 | `better-sqlite3` install fails | No prebuilt binary for the platform/Node version. | Install Python 3, make, and a C++ compiler, then reinstall. |
 | Camera does not start | Insecure origin, denied permission, or no camera. | Use `localhost` or HTTPS; allow camera permission; use gallery upload or manual serial entry. |
@@ -1401,13 +1380,14 @@ These are real behaviors of the current branch, documented so operators do not h
 | `web/README.md` is the Vite template | The project documentation is this root README; the web README is generic scaffold text. |
 | Docker copies `ocr/` and mentions `OCR_API_KEY` | The API’s `OCR_MODE=real` path is Tesseract, not the standalone Gemini module. |
 | No root `LICENSE` file | The Solidity source carries an SPDX MIT identifier, but repository-wide rights are stated in Section 6. |
-| No API tests | `api/package.json`’s test script intentionally exits with an error. |
+| Limited API tests | The committed `node:test` suite covers duplicate-batch rejection and its regulator alert; the other API routes still have no automated coverage. |
 
 ### 5.14 Pre-demo and pre-deployment checklist
 
 **Before a local demo**
 
 - [ ] `cd web && npm run build` succeeds.
+- [ ] `cd api && npm test` passes.
 - [ ] `VITE_USE_MOCKS` is set as intended (`true` for mock, exact `false` for API).
 - [ ] API is running on port 3001 when mocks are disabled.
 - [ ] Camera permission works on the demo origin, or gallery/manual entry is available.
@@ -1431,9 +1411,9 @@ These are real behaviors of the current branch, documented so operators do not h
 ---
 
 ## 👥 Authors
-- **Daniel Maina** – DevOps Engineer
+- **Daniel Maina** – DevOps and Cloud Engineer
 - **Linkoln tuhoto** – Full Stack Developer
-- **Maurice kabubu** – Backend Engineer
+- **Maurice kabubu** – Backend and MLOps Engineer
 - **Edward** – Cybersecurity Analyst and Red Team
 
 ## 📄 Copyright & License
