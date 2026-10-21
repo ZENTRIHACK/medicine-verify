@@ -20,12 +20,18 @@
 /* Slate Containers & Backgrounds */
 .bg-slate-950 { background-color: #020617 !important; }
 .bg-slate-900 { background-color: #0f172a !important; }
+.bg-slate-900\/80 { background-color: rgba(15, 23, 42, 0.8) !important; }
 .bg-slate-850 { background-color: #151e2e !important; }
 .bg-slate-800 { background-color: #1e293b !important; }
+.bg-slate-800\/80 { background-color: rgba(30, 41, 59, 0.8) !important; }
 .bg-slate-700 { background-color: #334155 !important; }
 .bg-slate-600 { background-color: #475569 !important; }
 .bg-slate-100 { background-color: #f1f5f9 !important; }
 .bg-slate-50  { background-color: #f8fafc !important; }
+
+.bg-blue-500\/10 { background-color: rgba(59, 130, 246, 0.1) !important; }
+.border-blue-500\/20 { border-color: rgba(59, 130, 246, 0.2) !important; }
+.backdrop-blur-xl { backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); }
 
 /* Slate Borders */
 .border-slate-800 { border-color: #1e293b !important; }

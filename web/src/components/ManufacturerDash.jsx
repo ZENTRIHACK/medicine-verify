@@ -190,33 +190,33 @@ export default function ManufacturerDash({ actor }) {
         </span>
       </div>
 
-      {/* Hero Section matching Friend's Netlify Design */}
-      <section className="overflow-hidden rounded-3xl bg-[#28145F] text-white shadow-sm">
-        <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:items-center">
+      {/* Task 2: Aligned Hero Container Styling */}
+      <section className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 md:p-8 backdrop-blur-xl shadow-2xl mb-8">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div>
-            <p className="text-[10px] font-extrabold tracking-[2.4px] text-purple-200 uppercase">
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 uppercase tracking-wider mb-3">
               ORIGIN OF THE SUPPLY CHAIN
-            </p>
-            <h1 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">
+            </span>
+            <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight mb-2">
               Manufacturer portal
             </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-purple-100">
+            <p className="text-slate-400 text-sm md:text-base max-w-2xl">
               Register medicine batches and assign a unique identifier to each pack before it leaves the manufacturing site.
             </p>
-            <div className="mt-5 flex flex-wrap gap-2">
-              <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold">
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 text-slate-300 border border-slate-700/50">
                 Traceable pack records
               </span>
-              <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 text-slate-300 border border-slate-700/50">
                 Event history
               </span>
-              <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 text-slate-300 border border-slate-700/50">
                 Cryptographic 16-Char Serials
               </span>
             </div>
           </div>
-          <div className="flex h-24 w-24 items-center justify-center rounded-3xl border border-white/15 bg-white/10">
-            <Factory size={48} className="text-purple-200" />
+          <div className="flex h-20 w-20 md:h-24 md:w-24 shrink-0 items-center justify-center rounded-2xl border border-slate-700/50 bg-slate-800/50 shadow-inner">
+            <Factory size={40} className="text-blue-400" />
           </div>
         </div>
       </section>

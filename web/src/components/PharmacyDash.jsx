@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Store,
   Package,
   Activity,
   AlertTriangle,
   Camera,
+  Image as ImageIcon,
   CheckCircle2,
   BadgeCheck,
   ShieldCheck,
@@ -13,13 +14,20 @@ import {
 import { api } from '../api';
 import strings from '../strings.json';
 
+const SCANNER_ID = 'pharmacy-reader';
+
 const inputClass =
   'mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
 const labelClass = 'block text-xs font-bold text-slate-700';
 const primaryButtonClass =
-  'inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-lg shadow-blue-500/20 px-4 py-3 text-sm transition disabled:cursor-not-allowed disabled:opacity-50';
-const secondaryButtonClass =
-  'inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-lg shadow-blue-500/20 px-4 py-3 text-sm transition disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer';
+
+function extractSerial(text) {
+  const raw = String(text ?? '').trim();
+  if (!raw) return '';
+  const match = raw.match(/\/v\/([^/?#\s]+)/);
+  return (match ? decodeURIComponent(match[1]) : raw).toUpperCase();
+}
 
 function Metric({ icon: Icon, label, value, detail, alert }) {
   return (
@@ -40,30 +48,12 @@ function Metric({ icon: Icon, label, value, detail, alert }) {
   );
 }
 
-/**
- * Releases a camera scanner cleanly without uncaught exceptions.
- */
-async function releaseScanner(scanner) {
-  if (!scanner) return;
-  try {
-    if (scanner.isScanning) await scanner.stop();
-  } catch {
-    /* already stopped or never started */
-  }
-  try {
-    const cleared = scanner.clear();
-    if (cleared && typeof cleared.catch === 'function') await cleared.catch(console.error);
-  } catch (err) {
-    console.error(err);
-  }
-}
-
 export default function PharmacyDash({ actor }) {
   const [serial, setSerial] = useState('');
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [scanning, setScanning] = useState(false);
+  const [cameraError, setCameraError] = useState('');
   const scannerRef = useRef(null);
 
   const [dispensedCount, setDispensedCount] = useState(0);
@@ -78,74 +68,8 @@ export default function PharmacyDash({ actor }) {
     }
   });
 
-  useEffect(() => {
-    return () => {
-      const scanner = scannerRef.current;
-      scannerRef.current = null;
-      if (scanner) {
-        if (scanner.isScanning) {
-          scanner.stop().then(() => scanner.clear().catch(console.error)).catch(console.error);
-        }
-        return scanner.clear().catch(console.error);
-      }
-    };
-  }, []);
-
-  const startScanner = async () => {
-    if (scannerRef.current) {
-      const previous = scannerRef.current;
-      scannerRef.current = null;
-      await releaseScanner(previous);
-    }
-
-    setScanning(true);
-    setResult(null);
-    setError(null);
-
-    const { Html5Qrcode } = await import('html5-qrcode');
-    const scanner = new Html5Qrcode('pharmacy-qr-reader');
-    const origClear = scanner.clear.bind(scanner);
-    scanner.clear = () => {
-      try {
-        const res = origClear();
-        return Promise.resolve(res);
-      } catch (err) {
-        return Promise.reject(err);
-      }
-    };
-    scannerRef.current = scanner;
-
-    try {
-      await scanner.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        (decodedText) => {
-          let scannedSerial = String(decodedText || '').trim();
-          const match = scannedSerial.match(/\/v\/([^/?#\s]+)/);
-          if (match) scannedSerial = decodeURIComponent(match[1]);
-          scannedSerial = scannedSerial.trim().toUpperCase();
-
-          void releaseScanner(scanner);
-          setScanning(false);
-          handleDispense(scannedSerial);
-        },
-        () => {} // ignore interim frame failures
-      );
-    } catch (err) {
-      setScanning(false);
-      setError('Could not access camera: ' + (err?.message || err));
-    }
-  };
-
-  const stopScanner = async () => {
-    const previous = scannerRef.current;
-    scannerRef.current = null;
-    await releaseScanner(previous);
-    setScanning(false);
-  };
-
-  const handleDispense = async (dispenseSerial) => {
-    const cleanSerial = String(dispenseSerial || '').trim().toUpperCase();
+  const handleDispense = useCallback(async (dispenseSerial) => {
+    const cleanSerial = extractSerial(dispenseSerial);
     if (!cleanSerial) return;
     setLoading(true);
     setError(null);
@@ -196,17 +120,86 @@ export default function PharmacyDash({ actor }) {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  // Task 1: Async camera lifecycle management
+  useEffect(() => {
+    let html5QrcodeScanner;
+    let isMounted = true;
+
+    const startScanner = async () => {
+      try {
+        const container = document.getElementById(SCANNER_ID);
+        if (!container || !isMounted) return;
+
+        const { Html5Qrcode } = await import('html5-qrcode');
+        if (!isMounted) return;
+
+        html5QrcodeScanner = new Html5Qrcode(SCANNER_ID);
+        scannerRef.current = html5QrcodeScanner;
+
+        await html5QrcodeScanner.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: { width: 250, height: 250 } },
+          (decodedText) => {
+            if (isMounted) handleDispense(decodedText);
+          },
+          (errorMessage) => {
+            /* ignore minor frame parse errors */
+          }
+        );
+      } catch (err) {
+        console.warn('Camera auto-start failed:', err);
+        if (isMounted) {
+          setCameraError('Camera unavailable. Use gallery upload or manual input below.');
+        }
+      }
+    };
+
+    startScanner();
+
+    return () => {
+      isMounted = false;
+      if (html5QrcodeScanner && html5QrcodeScanner.isScanning) {
+        html5QrcodeScanner
+          .stop()
+          .then(() => html5QrcodeScanner.clear().catch(console.error))
+          .catch(console.error);
+      } else if (html5QrcodeScanner) {
+        html5QrcodeScanner.clear().catch(console.error);
+      }
+    };
+  }, [handleDispense]);
+
+  // Gallery QR Image Upload Fallback
+  const handleQrImageUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setCameraError('');
+
+    try {
+      const { Html5Qrcode } = await import('html5-qrcode');
+      let scanner = scannerRef.current;
+      if (!scanner) {
+        scanner = new Html5Qrcode(SCANNER_ID);
+        scannerRef.current = scanner;
+      }
+      const decodedText = await scanner.scanFile(file, false);
+      if (decodedText) {
+        handleDispense(decodedText);
+      }
+    } catch (err) {
+      console.warn('QR file scan failed:', err);
+      setCameraError('No QR code detected in the selected image. Please try another image or enter the serial manually.');
+    } finally {
+      event.target.value = '';
+    }
   };
 
   const handleManualSubmit = (e) => {
     e.preventDefault();
-    const cleanSerial = serial.trim().toUpperCase();
+    const cleanSerial = extractSerial(serial);
     if (!cleanSerial) return;
-    if (scannerRef.current) {
-      void releaseScanner(scannerRef.current);
-      scannerRef.current = null;
-      setScanning(false);
-    }
     handleDispense(cleanSerial);
   };
 
@@ -219,33 +212,33 @@ export default function PharmacyDash({ actor }) {
         </span>
       </div>
 
-      {/* Hero Section */}
-      <section className="overflow-hidden rounded-3xl bg-[#0D3823] text-white shadow-sm">
-        <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:items-center">
+      {/* Task 2: Aligned Hero Container Styling */}
+      <section className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 md:p-8 backdrop-blur-xl shadow-2xl mb-8">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div>
-            <p className="text-[10px] font-extrabold tracking-[2.4px] text-emerald-200 uppercase">
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 uppercase tracking-wider mb-3">
               LAST-MILE DISPENSING
-            </p>
-            <h1 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl text-white">
+            </span>
+            <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight mb-2">
               Pharmacy portal
             </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-emerald-100">
+            <p className="text-slate-400 text-sm md:text-base max-w-2xl">
               Record pharmacy stock receipt and dispensing events so a pack&apos;s journey can be reviewed later.
             </p>
-            <div className="mt-5 flex flex-wrap gap-2">
-              <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white">
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 text-slate-300 border border-slate-700/50">
                 Traceable pack records
               </span>
-              <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 text-slate-300 border border-slate-700/50">
                 Double-dispense prevention
               </span>
-              <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white">
-                Patient Care Verification
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 text-slate-300 border border-slate-700/50">
+                Point-of-sale verification
               </span>
             </div>
           </div>
-          <div className="flex h-24 w-24 items-center justify-center rounded-3xl border border-white/15 bg-white/10">
-            <Store size={48} className="text-emerald-200" />
+          <div className="flex h-20 w-20 md:h-24 md:w-24 shrink-0 items-center justify-center rounded-2xl border border-slate-700/50 bg-slate-800/50 shadow-inner">
+            <Store size={40} className="text-blue-400" />
           </div>
         </div>
       </section>
@@ -283,44 +276,48 @@ export default function PharmacyDash({ actor }) {
             Verify and dispense medicine
           </h2>
           <p className="mt-1 text-sm text-slate-600">
-            Scan the pack QR code or enter the 16-character serial before handing the medicine to the patient.
+            Scan the pack QR code, upload a QR image from gallery, or enter the 16-character serial before handing the medicine to the patient.
           </p>
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
           {/* Scanner Pane */}
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-bold text-slate-700 flex items-center gap-2">
-                <Camera size={18} className="text-blue-600" />
-                Dispense Camera Scanner
-              </label>
-            </div>
-            <div
-              id="pharmacy-qr-reader"
-              className="overflow-hidden rounded-xl bg-white border border-slate-200"
-              style={{ minHeight: '220px' }}
-            />
-            <div className="mt-3">
-              {!scanning ? (
-                <button
-                  type="button"
-                  className={primaryButtonClass}
-                  onClick={startScanner}
-                  style={{ width: '100%' }}
-                >
-                  <Camera size={16} /> Start Camera Scanner
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className={secondaryButtonClass}
-                  onClick={stopScanner}
-                  style={{ width: '100%' }}
-                >
-                  Stop Camera Scanner
-                </button>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-bold text-slate-700 flex items-center gap-2">
+                  <Camera size={18} className="text-blue-600" />
+                  Dispense Camera Scanner
+                </label>
+              </div>
+
+              {/* The guaranteed DOM container */}
+              <div
+                id={SCANNER_ID}
+                className="overflow-hidden rounded-xl bg-white border border-slate-200"
+                style={{ minHeight: '220px' }}
+              />
+
+              {cameraError && (
+                <div className="mt-2.5 rounded-xl bg-amber-50 border border-amber-200 p-2.5 text-xs text-amber-800" role="alert">
+                  {cameraError}
+                </div>
               )}
+            </div>
+
+            {/* Gallery QR Image Fallback Button */}
+            <div className="mt-3 pt-3 border-t border-slate-200/80 flex items-center justify-between gap-2">
+              <label className="cursor-pointer inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-3 py-2 text-xs font-semibold transition">
+                <ImageIcon size={15} className="text-blue-600" />
+                Upload QR Image from Gallery
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleQrImageUpload}
+                  style={{ display: 'none' }}
+                />
+              </label>
+              <span className="text-[11px] text-slate-500">Instant scan</span>
             </div>
           </div>
 
@@ -480,7 +477,7 @@ export default function PharmacyDash({ actor }) {
         </div>
       )}
 
-      {/* Friend's Bottom Sections: Activity & Workflow */}
+      {/* Activity & Workflow */}
       <section className="mt-7 grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-center gap-3">

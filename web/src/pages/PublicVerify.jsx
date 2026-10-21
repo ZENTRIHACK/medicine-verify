@@ -269,8 +269,11 @@ export default function PublicVerify() {
           </p>
         </div>
 
-        {/* Search Bar + Controls */}
-        <form onSubmit={handleSearchSubmit} className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+        {/* Search Bar + Controls - Mobile/Desktop Responsive */}
+        <form
+          onSubmit={handleSearchSubmit}
+          className="mt-6 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full max-w-2xl mx-auto"
+        >
           <div className="relative flex-1">
             <input
               type="text"
@@ -285,25 +288,25 @@ export default function PublicVerify() {
           <button
             type="submit"
             disabled={!serialInput.trim()}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-lg shadow-blue-500/20 px-5 py-3 text-sm transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-lg shadow-blue-500/20 px-5 py-3 text-sm transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shrink-0"
           >
             <Search size={16} /> Check Serial
           </button>
         </form>
 
-        {/* Quick Action Buttons */}
-        <div className="mt-4 flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
-          <span className="text-xs font-semibold text-slate-500 mr-1">Direct options:</span>
+        {/* Quick Action Buttons - Stack vertically on mobile, horizontally on desktop */}
+        <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-2 pt-3 border-t border-slate-100 max-w-2xl mx-auto">
+          <span className="text-xs font-semibold text-slate-500 text-center sm:text-left mr-1">Direct options:</span>
           <button
             type="button"
             onClick={startCameraScanner}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-slate-50 hover:bg-slate-100 px-3.5 py-2 text-xs font-bold text-slate-700 transition cursor-pointer"
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-slate-50 hover:bg-slate-100 px-3.5 py-2 text-xs font-bold text-slate-700 transition cursor-pointer"
           >
             <Camera size={14} className="text-blue-600" /> Scan QR with Camera
           </button>
           <a
             href="#ocr-pack-section"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-slate-50 hover:bg-slate-100 px-3.5 py-2 text-xs font-bold text-slate-700 transition"
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-slate-50 hover:bg-slate-100 px-3.5 py-2 text-xs font-bold text-slate-700 transition"
           >
             <ImageIcon size={14} className="text-blue-600" /> Check Pack Photo (OCR)
           </a>
@@ -317,7 +320,7 @@ export default function PublicVerify() {
           role="dialog"
           aria-modal="true"
         >
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl border border-slate-200">
+          <div className="max-w-md w-full mx-auto overflow-hidden rounded-2xl bg-white p-6 shadow-2xl border border-slate-200">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <Camera size={18} className="text-blue-600" /> Scan Pack QR Code
@@ -332,7 +335,7 @@ export default function PublicVerify() {
             </div>
             <div
               id="public-search-qr-reader"
-              className="overflow-hidden rounded-2xl bg-slate-100 border border-slate-200"
+              className="overflow-hidden rounded-xl bg-slate-100 border border-slate-200"
               style={{ minHeight: '260px' }}
             />
             {cameraError && (

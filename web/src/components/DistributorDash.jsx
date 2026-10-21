@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import {
   Truck,
   Package,
@@ -10,19 +10,19 @@ import {
   CheckCircle2,
   BadgeCheck,
   ShieldCheck,
-  Camera
+  Camera,
+  Image as ImageIcon
 } from 'lucide-react';
-import useQrScanner, { SCANNER_ERROR_MESSAGES } from '../hooks/useQrScanner';
 import { api } from '../api';
 import strings from '../strings.json';
 
-const SCANNER_ID = 'distributor-qr-reader';
+const SCANNER_ID = 'distributor-reader';
 
 const inputClass =
   'mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
 const labelClass = 'block text-xs font-bold text-slate-700';
 const primaryButtonClass =
-  'inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-lg shadow-blue-500/20 px-4 py-3 text-sm transition disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-lg shadow-blue-500/20 px-4 py-3 text-sm transition disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer';
 
 function extractSerial(text) {
   const raw = String(text ?? '').trim();
@@ -54,6 +54,7 @@ export default function DistributorDash({ actor }) {
   const [error, setError] = useState('');
   const [cameraError, setCameraError] = useState('');
   const [transferring, setTransferring] = useState(false);
+  const scannerRef = useRef(null);
 
   const [activityLogs, setActivityLogs] = useState(() => {
     try {
@@ -71,19 +72,79 @@ export default function DistributorDash({ actor }) {
     setSerialInput('');
   }, []);
 
-  const handleCamera = useCallback(
-    (value, camErr) => {
-      if (camErr) {
-        setCameraError(camErr.message || SCANNER_ERROR_MESSAGES.generic);
-        return;
-      }
-      setCameraError('');
-      addSerial(value);
-    },
-    [addSerial]
-  );
+  // Async camera lifecycle management
+  useEffect(() => {
+    let html5QrcodeScanner;
+    let isMounted = true;
 
-  useQrScanner(SCANNER_ID, handleCamera);
+    const startScanner = async () => {
+      try {
+        const container = document.getElementById(SCANNER_ID);
+        if (!container || !isMounted) return;
+
+        const { Html5Qrcode } = await import('html5-qrcode');
+        if (!isMounted) return;
+
+        html5QrcodeScanner = new Html5Qrcode(SCANNER_ID);
+        scannerRef.current = html5QrcodeScanner;
+
+        await html5QrcodeScanner.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: { width: 250, height: 250 } },
+          (decodedText) => {
+            if (isMounted) addSerial(decodedText);
+          },
+          (errorMessage) => {
+            /* ignore minor frame parse errors */
+          }
+        );
+      } catch (err) {
+        console.warn('Camera auto-start failed:', err);
+        if (isMounted) {
+          setCameraError('Camera unavailable. Use gallery upload or manual input below.');
+        }
+      }
+    };
+
+    startScanner();
+
+    return () => {
+      isMounted = false;
+      if (html5QrcodeScanner && html5QrcodeScanner.isScanning) {
+        html5QrcodeScanner
+          .stop()
+          .then(() => html5QrcodeScanner.clear().catch(console.error))
+          .catch(console.error);
+      } else if (html5QrcodeScanner) {
+        html5QrcodeScanner.clear().catch(console.error);
+      }
+    };
+  }, [addSerial]);
+
+  // Gallery QR Image Upload Fallback
+  const handleQrImageUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setCameraError('');
+
+    try {
+      const { Html5Qrcode } = await import('html5-qrcode');
+      let scanner = scannerRef.current;
+      if (!scanner) {
+        scanner = new Html5Qrcode(SCANNER_ID);
+        scannerRef.current = scanner;
+      }
+      const decodedText = await scanner.scanFile(file, false);
+      if (decodedText) {
+        addSerial(decodedText);
+      }
+    } catch (err) {
+      console.warn('QR file scan failed:', err);
+      setCameraError('No QR code detected in the selected image. Please try another image or enter the serial manually.');
+    } finally {
+      event.target.value = '';
+    }
+  };
 
   async function submitTransfer(event) {
     event.preventDefault();
@@ -133,33 +194,33 @@ export default function DistributorDash({ actor }) {
         </span>
       </div>
 
-      {/* Hero Section */}
-      <section className="overflow-hidden rounded-3xl bg-[#102C38] text-white shadow-sm">
-        <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:items-center">
+      {/* Task 2: Aligned Hero Container Styling */}
+      <section className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 md:p-8 backdrop-blur-xl shadow-2xl mb-8">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div>
-            <p className="text-[10px] font-extrabold tracking-[2.4px] text-sky-200 uppercase">
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 uppercase tracking-wider mb-3">
               SUPPLY CHAIN MOVEMENT
-            </p>
-            <h1 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl text-white">
+            </span>
+            <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight mb-2">
               Distributor portal
             </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-sky-100">
+            <p className="text-slate-400 text-sm md:text-base max-w-2xl">
               Record stock received from manufacturers and log dispatches to pharmacies with traceable hand-off details.
             </p>
-            <div className="mt-5 flex flex-wrap gap-2">
-              <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white">
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 text-slate-300 border border-slate-700/50">
                 Traceable pack records
               </span>
-              <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 text-slate-300 border border-slate-700/50">
                 Custody handoff
               </span>
-              <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 text-slate-300 border border-slate-700/50">
                 Bulk Dispatch Queue
               </span>
             </div>
           </div>
-          <div className="flex h-24 w-24 items-center justify-center rounded-3xl border border-white/15 bg-white/10">
-            <Truck size={48} className="text-sky-200" />
+          <div className="flex h-20 w-20 md:h-24 md:w-24 shrink-0 items-center justify-center rounded-2xl border border-slate-700/50 bg-slate-800/50 shadow-inner">
+            <Truck size={40} className="text-blue-400" />
           </div>
         </div>
       </section>
@@ -196,29 +257,49 @@ export default function DistributorDash({ actor }) {
             Record stock intake and dispatch
           </h2>
           <p className="mt-1 text-sm text-slate-600">
-            Scan QR codes with the camera or enter 16-character pack serials manually to build a transfer queue.
+            Scan QR codes with the camera, upload a QR image from your gallery, or enter 16-character pack serials manually.
           </p>
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
-          {/* Scanner Pane */}
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Camera size={18} className="text-blue-600" />
-              <label className="text-xs font-bold text-slate-700">
-                Camera QR Scanner
-              </label>
-            </div>
-            <div
-              id={SCANNER_ID}
-              className="qr-reader overflow-hidden rounded-xl bg-white border border-slate-200"
-              style={{ minHeight: '220px' }}
-            />
-            {cameraError && (
-              <div className="mt-2 rounded-xl bg-red-50 border border-red-200 p-2 text-xs text-red-700" role="alert">
-                {cameraError}
+          {/* Scanner Pane with Camera + Gallery Upload Fallback */}
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-bold text-slate-700 flex items-center gap-2">
+                  <Camera size={18} className="text-blue-600" />
+                  Camera QR Scanner
+                </label>
               </div>
-            )}
+
+              {/* The guaranteed DOM container */}
+              <div
+                id={SCANNER_ID}
+                className="qr-reader overflow-hidden rounded-xl bg-white border border-slate-200"
+                style={{ minHeight: '220px' }}
+              />
+
+              {cameraError && (
+                <div className="mt-2.5 rounded-xl bg-amber-50 border border-amber-200 p-2.5 text-xs text-amber-800" role="alert">
+                  {cameraError}
+                </div>
+              )}
+            </div>
+
+            {/* Gallery QR Image Fallback Button */}
+            <div className="mt-3 pt-3 border-t border-slate-200/80 flex items-center justify-between gap-2">
+              <label className="cursor-pointer inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-3 py-2 text-xs font-semibold transition">
+                <ImageIcon size={15} className="text-blue-600" />
+                Upload QR Image from Gallery
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleQrImageUpload}
+                  style={{ display: 'none' }}
+                />
+              </label>
+              <span className="text-[11px] text-slate-500">Instant scan</span>
+            </div>
           </div>
 
           {/* Manual Entry Pane */}
@@ -349,7 +430,7 @@ export default function DistributorDash({ actor }) {
         )}
       </section>
 
-      {/* Friend's Bottom Sections: Activity & Workflow */}
+      {/* Activity & Workflow */}
       <section className="mt-7 grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-center gap-3">
