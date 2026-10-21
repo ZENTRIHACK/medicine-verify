@@ -102,7 +102,7 @@ export default function Dashboard() {
         <button
           type="button"
           onClick={handleLogout}
-          className="logout-btn inline-flex items-center gap-1.5 rounded-xl border border-[#E5E1EF] px-3.5 py-2 text-xs font-bold text-gray-600 transition hover:bg-gray-100 hover:text-[#242039]"
+          className="logout-btn inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-[#E5E1EF] px-3.5 py-2 text-xs font-bold text-gray-600 transition hover:bg-gray-100 hover:text-[#242039]"
         >
           Logout
         </button>
