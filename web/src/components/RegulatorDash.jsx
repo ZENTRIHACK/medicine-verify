@@ -18,19 +18,34 @@ export default function RegulatorDash() {
 
   useEffect(() => {
     let active = true;
-    api.getAlerts().then((response) => {
-      if (!active) return;
-      const items = Array.isArray(response) ? response : response?.alerts || [];
-      setAlerts([...items].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()));
-    }).catch(() => { if (active) setError(strings.messages.alertsError); });
-    return () => { active = false; };
+
+    const loadAlerts = () => {
+      api.getAlerts().then((response) => {
+        if (!active) return;
+        const items = Array.isArray(response) ? response : response?.alerts || [];
+        setAlerts([...items].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()));
+        setError('');
+      }).catch(() => { if (active) setError(strings.messages.alertsError); });
+    };
+
+    loadAlerts();
+    const timer = setInterval(loadAlerts, 5000);
+    return () => { active = false; clearInterval(timer); };
   }, []);
+
+  const duplicateBatchAlerts = alerts.filter((alert) => alert.type === 'duplicate_batch');
 
   return (
     <main className="page-container">
       <section className="card">
         <h1>Regulator dashboard</h1>
         {error && <div className="alert alert--flag" role="alert">{error}</div>}
+        {duplicateBatchAlerts.length > 0 && (
+          <div className="alert alert--flag" role="status">
+            {duplicateBatchAlerts.length} duplicate batch registration
+            {duplicateBatchAlerts.length === 1 ? ' was' : 's were'} blocked. Review the newest rows below.
+          </div>
+        )}
         {!error && alerts.length === 0 ? (
           <p>{strings.messages.noAlerts}</p>
         ) : (

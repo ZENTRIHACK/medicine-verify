@@ -10,6 +10,7 @@ const EVENT_LABELS = {
   dispensed: 'Dispensed',
   conflict: 'Conflict: needs review',
   double_dispense: 'Conflict: needs review',
+  duplicate_batch: 'Duplicate batch blocked',
   unknown: 'Unrecognized event'
 };
 
@@ -39,6 +40,9 @@ export function ocrText(match) {
 }
 
 export function alertText(alert) {
+  if (typeof alert === 'string' && alert) {
+    return EVENT_LABELS[alert] || alert;
+  }
   if (alert && typeof alert === 'object' && typeof alert.message === 'string' && alert.message) {
     return alert.message;
   }

@@ -54,6 +54,19 @@ const DEMO_ACTORS = [
   { id: 6, username: 'regulator', role: 'regulator', name: 'Demo Regulator', place: 'Nairobi', address: '0x1000000000000000000000000000000000000006' }
 ];
 
+function ensureBatchNoIndex(db) {
+  try {
+    db.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_batches_batch_no_nocase
+        ON batches(batchNo COLLATE NOCASE);
+    `);
+  } catch (error) {
+    console.warn(
+      `Could not create the unique batch-number index: ${error.message}`
+    );
+  }
+}
+
 function ensureInitialized(db) {
   const placeholders = TABLES.map(() => '?').join(', ');
   const { count } = db
@@ -61,6 +74,7 @@ function ensureInitialized(db) {
     .get(...TABLES);
 
   if (count === TABLES.length) {
+    ensureBatchNoIndex(db);
     return false;
   }
 
@@ -77,6 +91,8 @@ function ensureInitialized(db) {
       }
     }
   })();
+
+  ensureBatchNoIndex(db);
 
   return true;
 }
