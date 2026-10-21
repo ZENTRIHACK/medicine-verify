@@ -30,16 +30,18 @@ export function makeSerial(existing) {
   }
 }
 
-const MANUFACTURER = { id: 1, role: 'manufacturer', name: 'Kilimo Pharma Ltd (demo)', place: 'Nairobi' };
-const DISTRIBUTOR = { id: 2, role: 'distributor', name: 'Highland Distributors (demo)', place: 'Nakuru' };
+const MANUFACTURER = { id: 1, role: 'manufacturer', name: 'Zenocare Labs (demo)', place: 'Nairobi' };
+const DISTRIBUTOR = { id: 2, role: 'distributor', name: 'AfyaLink Distributors (demo)', place: 'Nairobi' };
 const PHARMACY = { id: 3, role: 'pharmacy', name: 'Mlimani Pharmacy (demo)', place: 'Meru' };
-const REGULATOR = { id: 4, role: 'regulator', name: 'Medicines Regulator (demo)', place: 'Nairobi' };
+const REGULATOR = { id: 6, role: 'regulator', name: 'Demo Regulator', place: 'Nairobi' };
 
 export const DEMO_USERNAMES = {
-  kilimo: MANUFACTURER,
-  highland: DISTRIBUTOR,
+  zenocare: MANUFACTURER,
+  afyalink: DISTRIBUTOR,
   mlimani: PHARMACY,
   regulator: REGULATOR,
+  kilimo: MANUFACTURER,
+  highland: DISTRIBUTOR,
 };
 
 function minutesAgo(m) {
