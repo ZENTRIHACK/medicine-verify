@@ -1,6 +1,6 @@
 
 import { useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   ArrowRight,
@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 export default function ScanMedicine() {
+  const navigate = useNavigate();
   const [image, setImage] = useState(null);
   const [error, setError] = useState("");
   const fileInputRef = useRef(null);
@@ -68,10 +69,8 @@ export default function ScanMedicine() {
       return;
     }
 
-    // OCR and registry verification will be connected here.
-    setError(
-      "Image selected successfully. Verification will be available after the API is connected."
-    );
+    // The frontend is ready to hand off to verification. Until the OCR/API is connected, the result page clearly labels this as a demo.
+    navigate(`/results?demo=unreadable&scanId=scan-${Date.now()}&source=upload`);
   }
 
   return (

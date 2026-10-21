@@ -1,115 +1,142 @@
-
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
-  ArrowLeft,
   ArrowRight,
   CheckCircle2,
   CircleAlert,
   FileSearch,
+  History,
   ScanLine,
   ShieldAlert,
   ShieldCheck,
   TriangleAlert,
 } from "lucide-react";
+import { saveScan } from "../utils/scanStorage";
 
-const demoResults = {
+const demoRecords = {
   match: {
-    title: "Matches registry",
-    description:
-      "The extracted packaging details match the selected demonstration registry record.",
-    icon: CheckCircle2,
-    color: "green",
-    batch: "DEMO-2026-001",
-    expiry: "2027-03",
+    product: "Aleron 500",
+    batchNo: "ALR-2026-008",
+    uniqueCode: "MS-K7P9-X2Q4",
+    expiry: "2027-08",
     manufacturer: "Example Pharmaceuticals",
+    distributor: "Example Medical Distributors",
+    pharmacy: "Example Community Pharmacy",
+    outcome: "match",
+    codeStatus: "unused",
     differences: [],
   },
-
   mismatch: {
-    title: "Does not match registry",
-    description:
-      "One or more extracted details differ from the demonstration registry record.",
-    icon: ShieldAlert,
-    color: "orange",
-    batch: "DEMO-2026-009",
+    product: "Nuvex 10",
+    batchNo: "NVX-2026-031",
+    uniqueCode: "MS-P4D8-M6R2",
     expiry: "2027-03",
     manufacturer: "Example Pharmaceuticals",
+    distributor: "No verified transfer record",
+    pharmacy: "Not recorded",
+    outcome: "mismatch",
+    codeStatus: "unused",
     differences: [
-      "The extracted batch number differs from the demonstration registry record.",
+      "The extracted batch details differ from the demonstration registry record.",
     ],
   },
-
   unreadable: {
-    title: "Unable to read details",
-    description:
-      "The required details could not be read reliably. Try taking a clearer photograph.",
-    icon: TriangleAlert,
-    color: "red",
-    batch: null,
+    product: "Medicine not identified",
+    batchNo: null,
+    uniqueCode: null,
     expiry: null,
     manufacturer: null,
+    distributor: null,
+    pharmacy: null,
+    outcome: "unreadable",
+    codeStatus: "unknown",
     differences: [],
   },
 };
 
+const outcomes = {
+  match: {
+    title: "Matches registry",
+    description:
+      "The available packaging details match the demonstration registry record.",
+    icon: CheckCircle2,
+    classes: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  },
+  mismatch: {
+    title: "Verification concern",
+    description:
+      "Some details do not match the demonstration registry record. Further investigation is needed.",
+    icon: ShieldAlert,
+    classes: "border-amber-200 bg-amber-50 text-amber-900",
+  },
+  unreadable: {
+    title: "Unable to verify",
+    description:
+      "We could not read enough information to complete the comparison.",
+    icon: TriangleAlert,
+    classes: "border-red-200 bg-red-50 text-red-800",
+  },
+};
+
 export default function VerificationResult() {
-  const [searchParams] = useSearchParams();
-  const demoStatus = searchParams.get("demo");
-  const result = demoResults[demoStatus];
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  if (!result) {
-    return (
-      <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6">
-        <div className="rounded-3xl border border-[#E9E5F1] bg-white p-8 text-center sm:p-12">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-purple-100 text-[#4926C8]">
-            <FileSearch size={30} />
-          </div>
+  const demoType = searchParams.get("demo") || "match";
+  const isUploadedImage = searchParams.get("source") === "upload";
+  const record = demoRecords[demoType] || demoRecords.match;
 
-          <h1 className="mt-5 text-2xl font-extrabold text-[#242039]">
-            No verification result yet
-          </h1>
+  // Stable ID for each demonstration scenario.
+  // The real scanning flow will generate a unique ID for each scan.
+  const scanId = searchParams.get("scanId") || `demo-${demoType}`;
 
-          <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-gray-500">
-            Upload or capture a medicine-pack image first. Actual results will
-            appear here after the OCR and registry API are connected.
-          </p>
+  const [codeStatus, setCodeStatus] = useState(
+    searchParams.get("used") === "true"
+      ? "dispensed"
+      : record.codeStatus
+  );
 
-          <Link
-            to="/scan"
-            className="mt-7 inline-flex items-center gap-2 rounded-xl bg-[#4926C8] px-5 py-3 text-sm font-bold text-white hover:bg-[#381BA8]"
-          >
-            <ScanLine size={17} />
-            Go to Scan Medicine
-          </Link>
-        </div>
-      </div>
-    );
+  const result = outcomes[record.outcome];
+  const ResultIcon = result.icon;
+
+  useEffect(() => {
+    const saved = saveScan({
+      id: scanId,
+      product: record.product,
+      batchNo: record.batchNo,
+      uniqueCode: record.uniqueCode,
+      expiry: record.expiry,
+      manufacturer: record.manufacturer,
+      distributor: record.distributor,
+      pharmacy: record.pharmacy,
+      status: record.outcome,
+      codeStatus,
+      differences: record.differences,
+      events: [],
+      demo: true,
+    });
+
+    if (!saved) {
+      console.error("MediScan could not save this result locally.");
+    }
+  }, [scanId, record, codeStatus]);
+
+  function changeDemoStatus(value) {
+    setCodeStatus(value);
+
+    setSearchParams({
+      demo: demoType,
+      scanId,
+      used: value === "dispensed" ? "true" : "false",
+    });
   }
 
-  const Icon = result.icon;
+  const hasConcern =
+    record.outcome !== "match" || codeStatus === "dispensed";
 
-  const styles = {
-    green: {
-      panel: "border-emerald-200 bg-emerald-50",
-      icon: "bg-emerald-100 text-emerald-700",
-      title: "text-emerald-900",
-      badge: "bg-emerald-100 text-emerald-800",
-    },
-    orange: {
-      panel: "border-orange-200 bg-orange-50",
-      icon: "bg-orange-100 text-orange-700",
-      title: "text-orange-900",
-      badge: "bg-orange-100 text-orange-800",
-    },
-    red: {
-      panel: "border-red-200 bg-red-50",
-      icon: "bg-red-100 text-red-700",
-      title: "text-red-900",
-      badge: "bg-red-100 text-red-800",
-    },
-  };
-
-  const style = styles[result.color];
+  const detailsUrl =
+    `/medicine-details?id=${encodeURIComponent(scanId)}` +
+    `&demo=${encodeURIComponent(demoType)}` +
+    `&used=${codeStatus === "dispensed"}`;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-9">
@@ -117,153 +144,250 @@ export default function VerificationResult() {
         to="/scan"
         className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-[#4926C8]"
       >
-        <ArrowLeft size={17} />
-        Back to scanning
+        <ScanLine size={17} />
+        Scan another medicine
       </Link>
 
       <header>
         <p className="text-[10px] font-extrabold tracking-[2px] text-[#4926C8]">
-          MEDICINE VERIFICATION
+          MEDISCAN VERIFICATION
         </p>
 
         <h1 className="mt-2 text-3xl font-extrabold text-[#242039]">
-          Verification result
+          Your scan result
         </h1>
 
         <p className="mt-2 text-sm text-gray-500">
-          Review the comparison outcome and the details available.
+          {isUploadedImage ? "Your scan is ready for backend integration." : "Here's what we found in this demonstration record."}
         </p>
       </header>
 
       <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
-        <strong>DEMO PREVIEW — NOT A REAL VERIFICATION.</strong> This result
-        uses fictional sample data and is not based on your uploaded image or a
-        live medicine registry.
+        <strong>{isUploadedImage ? "SCAN RECEIVED — VERIFICATION NOT RUN." : "DEMO PREVIEW."}</strong>{" "}
+        {isUploadedImage
+          ? "Your image was selected, but OCR and the live registry API are not connected yet. No medicine authenticity conclusion has been made."
+          : "This result uses fictional sample data. It has not been checked against a live registry."}
       </div>
 
-      <section className={`rounded-3xl border p-6 sm:p-8 ${style.panel}`}>
-        <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-          <div
-            className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl ${style.icon}`}
-          >
-            <Icon size={34} />
+      {/* Main verification outcome */}
+      <section
+        className={`rounded-3xl border p-6 sm:p-8 ${result.classes}`}
+      >
+        <div className="flex items-start gap-4">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/80">
+            <ResultIcon size={30} />
           </div>
 
           <div>
-            <span
-              className={`inline-block rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-wide ${style.badge}`}
-            >
-              Demo outcome
-            </span>
+            <p className="text-[10px] font-extrabold uppercase tracking-[1.5px]">
+              Verification outcome
+            </p>
 
-            <h2 className={`mt-2 text-2xl font-extrabold ${style.title}`}>
+            <h2 className="mt-2 text-2xl font-extrabold">
               {result.title}
             </h2>
 
-            <p className="mt-2 max-w-xl text-sm leading-6 text-gray-600">
+            <p className="mt-3 text-sm leading-6 opacity-90">
               {result.description}
             </p>
           </div>
         </div>
+
+        {hasConcern && (
+          <div className="mt-5 flex items-start gap-3 rounded-xl bg-white/80 p-4 text-sm leading-6">
+            <CircleAlert size={20} className="mt-0.5 shrink-0" />
+
+            <p>
+              Do not rely on this demonstration result to decide whether to
+              use a medicine. If you have concerns, seek advice from a
+              qualified pharmacist or healthcare professional.
+            </p>
+          </div>
+        )}
       </section>
 
-      <section className="rounded-2xl border border-[#E9E5F1] bg-white p-5 sm:p-7">
+      {/* Unique pack code */}
+      {record.uniqueCode && (
+        <section className="rounded-2xl border border-[#E9E5F1] bg-white p-5 sm:p-6">
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-purple-100 text-[#4926C8]">
+              <ShieldCheck size={22} />
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <h2 className="font-bold text-[#242039]">
+                Unique pack code
+              </h2>
+
+              <p className="mt-1 break-all font-mono text-sm text-gray-600">
+                {record.uniqueCode}
+              </p>
+
+              <div className="mt-4 flex items-start gap-2">
+                {codeStatus === "dispensed" ? (
+                  <CircleAlert
+                    size={18}
+                    className="mt-0.5 shrink-0 text-amber-600"
+                  />
+                ) : (
+                  <CheckCircle2
+                    size={18}
+                    className="mt-0.5 shrink-0 text-emerald-600"
+                  />
+                )}
+
+                <div>
+                  <p className="text-sm font-bold text-[#242039]">
+                    {codeStatus === "dispensed"
+                      ? "Previously recorded as dispensed"
+                      : codeStatus === "unknown"
+                        ? "Code status unknown"
+                        : "No prior dispensing recorded"}
+                  </p>
+
+                  <p className="mt-1 text-xs leading-5 text-gray-500">
+                    {codeStatus === "dispensed"
+                      ? "This demonstration code has a previous dispensing record. A repeated scan or copied code requires investigation."
+                      : codeStatus === "unknown"
+                        ? "The code status could not be established."
+                        : "This demonstration record contains no prior dispensing event. That does not prove the package is genuine or unused."}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Basic product information */}
+      <section className="rounded-2xl border border-[#E9E5F1] bg-white p-5 sm:p-6">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-100 text-[#4926C8]">
-            <FileSearch size={21} />
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-purple-100 text-[#4926C8]">
+            <FileSearch size={22} />
           </div>
 
           <div>
-            <h2 className="font-bold text-[#242039]">Extracted details</h2>
+            <h2 className="font-bold text-[#242039]">
+              Medicine identified
+            </h2>
             <p className="mt-1 text-xs text-gray-500">
-              Fictional example fields
+              Basic product information
             </p>
           </div>
         </div>
 
-        <div className="mt-5 divide-y divide-gray-100">
-          {[
-            ["Batch number", result.batch],
-            ["Expiry date", result.expiry],
-            ["Manufacturer", result.manufacturer],
-          ].map(([label, value]) => (
-            <div
-              key={label}
-              className="flex flex-col gap-1 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
-            >
-              <span className="text-sm text-gray-500">{label}</span>
+        <h3 className="mt-5 text-xl font-extrabold text-[#28145F]">
+          {record.product}
+        </h3>
 
-              <span className="break-words text-sm font-semibold text-[#242039] sm:text-right">
-                {value || "Not available"}
-              </span>
+        <p className="mt-2 text-sm text-gray-500">
+          Batch: {record.batchNo || "Not available"}
+        </p>
+
+        <Link
+          to={detailsUrl}
+          className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#4926C8] px-5 py-3.5 text-sm font-bold text-white transition hover:bg-[#381BA8] sm:w-auto"
+        >
+          View full medicine details
+          <ArrowRight size={17} />
+        </Link>
+      </section>
+
+      {/* Supply chain summary */}
+      <section className="rounded-2xl border border-[#E9E5F1] bg-white p-5 sm:p-6">
+        <div className="flex items-center gap-3">
+          <History size={21} className="text-[#4926C8]" />
+
+          <div>
+            <h2 className="font-bold text-[#242039]">
+              Recorded supply chain
+            </h2>
+            <p className="mt-1 text-xs text-gray-500">
+              Sample information, where available
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-5 space-y-4">
+          {[
+            ["Manufacturer", record.manufacturer],
+            ["Distributor", record.distributor],
+            ["Pharmacy", record.pharmacy],
+          ].map(([label, value], index) => (
+            <div key={label} className="flex gap-3">
+              <div className="flex flex-col items-center">
+                <span
+                  className={`h-3 w-3 rounded-full ${
+                    value &&
+                    !value.startsWith("No ") &&
+                    value !== "Not recorded"
+                      ? "bg-[#4926C8]"
+                      : "bg-gray-300"
+                  }`}
+                />
+
+                {index < 2 && (
+                  <span className="my-1 h-6 w-px bg-gray-200" />
+                )}
+              </div>
+
+              <div className="-mt-1 min-w-0 pb-2">
+                <p className="text-xs text-gray-500">{label}</p>
+                <p className="mt-1 break-words text-sm font-semibold text-[#242039]">
+                  {value || "Not available"}
+                </p>
+              </div>
             </div>
           ))}
         </div>
+
+        <Link
+          to={detailsUrl}
+          className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-[#4926C8] hover:underline"
+        >
+          Explore full history
+          <ArrowRight size={16} />
+        </Link>
       </section>
 
-      {result.differences.length > 0 && (
-        <section className="rounded-2xl border border-orange-200 bg-white p-5 sm:p-7">
-          <div className="flex items-center gap-3">
-            <CircleAlert className="text-orange-600" size={22} />
-            <h2 className="font-bold text-[#242039]">
-              Differences identified
-            </h2>
-          </div>
+      {/* Developer-only demonstration control */}
+      <details className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-4">
+        <summary className="cursor-pointer text-sm font-bold text-gray-600">
+          Developer preview: simulate a dispensing record
+        </summary>
 
-          <ul className="mt-4 space-y-3">
-            {result.differences.map((difference) => (
-              <li
-                key={difference}
-                className="flex items-start gap-3 text-sm leading-6 text-gray-600"
-              >
-                <TriangleAlert
-                  size={17}
-                  className="mt-1 shrink-0 text-orange-600"
-                />
-                {difference}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {demoStatus === "unreadable" && (
-        <section className="rounded-2xl border border-red-100 bg-white p-5 sm:p-7">
-          <h2 className="font-bold text-[#242039]">Try another photograph</h2>
-
-          <p className="mt-2 text-sm leading-6 text-gray-500">
-            Use good lighting, keep the text in focus, and capture the side of
-            the package containing the batch number and expiry date.
-          </p>
-        </section>
-      )}
-
-      <section className="flex items-start gap-3 rounded-2xl border border-purple-100 bg-purple-50 p-4 text-[#5B4A85]">
-        <ShieldCheck size={21} className="mt-0.5 shrink-0" />
-
-        <p className="text-xs leading-6">
-          A registry comparison does not test the medicine inside. Do not use
-          this demonstration screen to make decisions about a medicine.
+        <p className="mt-3 text-xs leading-5 text-gray-500">
+          This control is for UI testing only. It does not mark a real
+          medicine as dispensed or update a backend database.
         </p>
-      </section>
 
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <Link
-          to="/scan"
-          className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#4926C8] px-5 py-3.5 text-sm font-bold text-white hover:bg-[#381BA8]"
-        >
-          <ScanLine size={17} />
-          Scan another package
-        </Link>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => changeDemoStatus("unused")}
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold"
+          >
+            No prior dispensing
+          </button>
 
-        <Link
-          to="/"
-          className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-purple-200 bg-white px-5 py-3.5 text-sm font-bold text-[#4926C8] hover:bg-purple-50"
-        >
-          Back to dashboard
-          <ArrowRight size={17} />
-        </Link>
-      </div>
+          <button
+            type="button"
+            onClick={() => changeDemoStatus("dispensed")}
+            className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800"
+          >
+            Previously dispensed
+          </button>
+        </div>
+      </details>
+
+      <footer className="flex items-start gap-3 rounded-2xl border border-purple-100 bg-purple-50 p-4 text-[#5B4A85]">
+        <ShieldCheck size={20} className="mt-0.5 shrink-0" />
+        <p className="text-xs leading-6">
+          Registry matching and code history do not test the medicine inside.
+          If you are concerned about its effectiveness, speak with a qualified
+          healthcare professional.
+        </p>
+      </footer>
     </div>
   );
 }

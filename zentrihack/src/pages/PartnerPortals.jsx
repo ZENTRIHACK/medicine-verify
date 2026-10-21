@@ -1,0 +1,17 @@
+import { Link } from "react-router-dom";
+import { ArrowRight, Factory, ShieldCheck, Store, Truck, Users, Workflow } from "lucide-react";
+
+const portals = [
+  { path: "/partners/manufacturer", title: "Manufacturer", subtitle: "Register medicine batches, product details, expiry dates, and unique pack identifiers.", icon: Factory, tag: "Register packs", color: "bg-purple-50 text-[#4926C8]" },
+  { path: "/partners/distributor", title: "Distributor", subtitle: "Log incoming stock and record dispatches to pharmacies with a traceable hand-off.", icon: Truck, tag: "Track deliveries", color: "bg-sky-50 text-sky-700" },
+  { path: "/partners/pharmacy", title: "Pharmacy", subtitle: "Record stock receipt and dispensing events against individual medicine pack codes.", icon: Store, tag: "Manage dispensing", color: "bg-emerald-50 text-emerald-700" },
+];
+
+export default function PartnerPortals() {
+  return <div className="mx-auto max-w-6xl px-4 py-7 sm:px-6 sm:py-10">
+    <div className="rounded-3xl bg-[#28145F] p-6 text-white sm:p-9"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10"><Workflow size={26}/></div><p className="mt-5 text-[10px] font-extrabold tracking-[2.5px] text-purple-200">SUPPLY CHAIN WORKSPACE</p><h1 className="mt-2 text-3xl font-extrabold sm:text-4xl">Partner portals</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-purple-100">MediScan needs every authorized organization to add events as medicine moves from the manufacturer to the distributor and pharmacy. Choose a workspace to explore the frontend.</p></div>
+    <div className="mt-5 flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900"><ShieldCheck size={20} className="mt-0.5 shrink-0"/><p><strong>Prototype mode:</strong> separate logins and role permissions will be added with the backend. These pages currently share demo data stored in this browser; do not use them for real stock or patient records.</p></div>
+    <div className="mt-7 grid gap-5 lg:grid-cols-3">{portals.map(({ path, title, subtitle, icon: Icon, tag, color }) => <article key={path} className="flex flex-col rounded-3xl border border-[#E9E5F1] bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${color}`}><Icon size={27}/></div><span className="mt-5 w-fit rounded-full bg-gray-100 px-3 py-1 text-[10px] font-extrabold uppercase tracking-wide text-gray-500">{tag}</span><h2 className="mt-3 text-xl font-extrabold text-[#242039]">{title} workspace</h2><p className="mt-2 flex-1 text-sm leading-6 text-gray-500">{subtitle}</p><Link to={path} className="mt-6 inline-flex items-center justify-between rounded-xl bg-[#4926C8] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#3920A1]">Open {title.toLowerCase()} portal <ArrowRight size={17}/></Link></article>)}</div>
+    <div className="mt-7 rounded-2xl border border-[#E9E5F1] bg-white p-5"><div className="flex items-start gap-3"><div className="rounded-xl bg-purple-50 p-2.5 text-[#4926C8]"><Users size={21}/></div><div><h2 className="font-extrabold text-[#242039]">Planned account model</h2><p className="mt-1 text-sm leading-6 text-gray-500">Each organization will later have its own registration and login, with approval before it can update records. Manufacturer users register batches, distributor users update hand-offs, and pharmacy users update receipts and dispensing. The backend—not the browser—must enforce those permissions.</p></div></div></div>
+  </div>;
+}
