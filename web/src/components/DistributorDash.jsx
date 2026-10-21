@@ -19,10 +19,10 @@ import strings from '../strings.json';
 const SCANNER_ID = 'distributor-reader';
 
 const inputClass =
-  'mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-3 text-sm text-white placeholder-slate-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30';
-const labelClass = 'block text-xs font-bold text-slate-300';
+  'mt-1.5 w-full rounded-xl border border-[#E5E1EF] bg-white px-3.5 py-3 text-sm text-[#242039] outline-none transition focus:border-[#8067DE] focus:ring-2 focus:ring-purple-100';
+const labelClass = 'block text-xs font-bold text-[#514B67]';
 const primaryButtonClass =
-  'inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-lg shadow-blue-500/30 px-5 py-3 text-sm transition disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer';
+  'inline-flex items-center justify-center gap-2 rounded-xl bg-[#4926C8] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#3920A1] disabled:cursor-not-allowed disabled:opacity-50';
 
 function extractSerial(text) {
   const raw = String(text ?? '').trim();
@@ -33,15 +33,15 @@ function extractSerial(text) {
 
 function Metric({ icon: Icon, label, value, detail }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
+    <div className="rounded-2xl border border-[#E9E5F1] bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-sky-400">{label}</span>
-        <span className="rounded-xl bg-sky-500/15 p-2.5 text-sky-400 border border-sky-500/30">
+        <span className="text-sm font-semibold text-gray-500">{label}</span>
+        <span className="rounded-xl bg-purple-50 p-2.5 text-[#4926C8]">
           <Icon size={20} />
         </span>
       </div>
-      <p className="mt-4 text-3xl font-extrabold text-white">{value}</p>
-      <p className="mt-1 text-xs text-slate-400">{detail}</p>
+      <p className="mt-4 text-3xl font-extrabold text-[#242039]">{value}</p>
+      <p className="mt-1 text-xs text-gray-400">{detail}</p>
     </div>
   );
 }
@@ -72,7 +72,6 @@ export default function DistributorDash({ actor }) {
     setSerialInput('');
   }, []);
 
-  // Async camera lifecycle management
   useEffect(() => {
     let html5QrcodeScanner;
     let isMounted = true;
@@ -94,7 +93,7 @@ export default function DistributorDash({ actor }) {
           (decodedText) => {
             if (isMounted) addSerial(decodedText);
           },
-          (errorMessage) => {
+          () => {
             /* ignore minor frame parse errors */
           }
         );
@@ -121,7 +120,6 @@ export default function DistributorDash({ actor }) {
     };
   }, [addSerial]);
 
-  // Gallery QR Image Upload Fallback
   const handleQrImageUpload = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -187,40 +185,40 @@ export default function DistributorDash({ actor }) {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-7 sm:px-6 sm:py-10">
-      {/* Top Status Bar with Luminous Sky Tag */}
+      {/* Top Status Bar */}
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <span className="inline-flex items-center gap-2 rounded-full border border-sky-500/30 bg-sky-500/15 px-3.5 py-1.5 text-xs font-bold text-sky-400">
+        <span className="inline-flex items-center gap-2 rounded-full border border-sky-100 bg-sky-50 px-3.5 py-1.5 text-xs font-bold text-sky-700">
           <ShieldCheck size={15} /> Authenticated Distributor Node · {actor?.name || 'AfyaLink Distributors'}
         </span>
       </div>
 
-      {/* Hero Header — Bright Clinical Blue */}
-      <section className="bg-slate-900 border border-blue-500/40 rounded-2xl p-6 md:p-8 shadow-xl shadow-blue-500/10 mb-8">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+      {/* Hero Section matching Friend's Netlify Design */}
+      <section className="overflow-hidden rounded-3xl bg-[#28145F] text-white shadow-sm">
+        <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:items-center">
           <div>
-            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-blue-600 text-white tracking-wider uppercase mb-3 shadow-md shadow-blue-600/20">
+            <p className="text-[10px] font-extrabold tracking-[2.4px] text-purple-200 uppercase">
               SUPPLY CHAIN MOVEMENT
-            </span>
-            <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight mb-2">
+            </p>
+            <h1 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">
               Distributor portal
             </h1>
-            <p className="text-slate-300 text-sm md:text-base max-w-2xl">
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-purple-100">
               Record stock received from manufacturers and log dispatches to pharmacies with traceable hand-off details.
             </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-950/70 text-blue-300 border border-blue-500/30">
+            <div className="mt-5 flex flex-wrap gap-2">
+              <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold">
                 Traceable pack records
               </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-950/70 text-blue-300 border border-blue-500/30">
+              <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold">
                 Custody handoff
               </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-950/70 text-blue-300 border border-blue-500/30">
+              <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold">
                 Bulk Dispatch Queue
               </span>
             </div>
           </div>
-          <div className="flex h-20 w-20 md:h-24 md:w-24 shrink-0 items-center justify-center rounded-2xl border border-blue-500/30 bg-blue-950/40 shadow-inner">
-            <Truck size={40} className="text-blue-400" />
+          <div className="flex h-24 w-24 items-center justify-center rounded-3xl border border-white/15 bg-white/10">
+            <Truck size={48} className="text-purple-200" />
           </div>
         </div>
       </section>
@@ -248,48 +246,44 @@ export default function DistributorDash({ actor }) {
       </div>
 
       {/* Main Workspace: Side-by-side Scanner and Manual Input */}
-      <section className="mt-7 rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-xl sm:p-8">
+      <section className="mt-7 rounded-3xl border border-[#E9E5F1] bg-white p-5 shadow-sm sm:p-6">
         <div>
-          <p className="text-[10px] font-extrabold tracking-[2px] text-sky-400 uppercase">
+          <p className="text-[10px] font-extrabold tracking-[2px] text-[#4926C8] uppercase">
             SUPPLY CHAIN WORKSPACE
           </p>
-          <h2 className="mt-1 text-xl font-extrabold text-white">
+          <h2 className="mt-1 text-xl font-extrabold text-[#242039]">
             Record stock intake and dispatch
           </h2>
-          <p className="mt-1 text-sm text-slate-400">
-            Scan QR codes with the camera, upload a QR image from your gallery, or enter 16-character pack serials manually.
+          <p className="mt-1 text-sm text-gray-500">
+            Scan QR codes with the camera, upload a QR image from your gallery, or enter 16-character pack serials manually to build a transfer queue.
           </p>
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
-          {/* Scanner Pane with Camera + Gallery Upload Fallback */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 flex flex-col justify-between">
+          {/* Scanner Pane */}
+          <div className="flex flex-col justify-between rounded-2xl border border-gray-200 bg-gray-50 p-4">
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-bold text-slate-300 flex items-center gap-2">
-                  <Camera size={18} className="text-sky-400" />
+              <div className="flex items-center gap-2 mb-2">
+                <Camera size={18} className="text-[#4926C8]" />
+                <label className="text-xs font-bold text-[#514B67]">
                   Camera QR Scanner
                 </label>
               </div>
-
-              {/* The guaranteed DOM container */}
               <div
                 id={SCANNER_ID}
-                className="qr-reader overflow-hidden rounded-xl bg-slate-900 border border-slate-800"
+                className="qr-reader overflow-hidden rounded-xl bg-white border border-gray-200"
                 style={{ minHeight: '220px' }}
               />
-
               {cameraError && (
-                <div className="mt-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 p-2.5 text-xs text-amber-300" role="alert">
+                <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800" role="alert">
                   {cameraError}
                 </div>
               )}
             </div>
 
-            {/* Gallery QR Image Fallback Button */}
-            <div className="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
-              <label className="cursor-pointer inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 px-3.5 py-2 text-xs font-semibold transition">
-                <ImageIcon size={15} className="text-sky-400" />
+            <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between gap-2">
+              <label className="cursor-pointer inline-flex items-center gap-1.5 rounded-xl border border-[#E5E1EF] bg-white hover:bg-gray-50 text-[#242039] px-3.5 py-2 text-xs font-semibold transition">
+                <ImageIcon size={15} className="text-[#4926C8]" />
                 Upload QR Image from Gallery
                 <input
                   type="file"
@@ -298,12 +292,12 @@ export default function DistributorDash({ actor }) {
                   style={{ display: 'none' }}
                 />
               </label>
-              <span className="text-[11px] text-slate-400">Instant scan</span>
+              <span className="text-[11px] text-gray-500">Instant scan</span>
             </div>
           </div>
 
           {/* Manual Entry Pane */}
-          <div className="flex flex-col justify-between rounded-2xl border border-slate-800 bg-slate-950 p-4">
+          <div className="flex flex-col justify-between rounded-2xl border border-gray-200 bg-gray-50 p-4">
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -331,12 +325,12 @@ export default function DistributorDash({ actor }) {
                   <Plus size={16} /> Add
                 </button>
               </div>
-              <span className="mt-2 block text-xs text-slate-400 font-normal">
+              <span className="mt-2 block text-xs text-gray-500">
                 16-character Base32 serial printed under pack QR code.
               </span>
             </form>
 
-            <div className="mt-4 rounded-xl bg-sky-500/10 p-3 text-xs leading-5 text-sky-200 border border-sky-500/20">
+            <div className="mt-4 rounded-xl bg-sky-50 p-3 text-xs leading-5 text-sky-900 border border-sky-100">
               Only scan or add serials for stock physically received in your warehouse or staged for immediate dispatch.
             </div>
           </div>
@@ -344,27 +338,27 @@ export default function DistributorDash({ actor }) {
 
         {/* Queue of Serials */}
         {serialsList.length > 0 && (
-          <div className="mt-6 border-t border-slate-800 pt-6">
+          <div className="mt-6 border-t border-[#EEEAF5] pt-6">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-white">
+              <h3 className="text-sm font-bold text-[#242039]">
                 Transfer Queue ({serialsList.length} packs staged)
               </h3>
               <button
                 type="button"
                 onClick={() => setSerialsList([])}
-                className="text-xs font-bold text-rose-400 hover:underline cursor-pointer"
+                className="text-xs font-bold text-red-600 hover:underline"
               >
                 Clear Queue
               </button>
             </div>
 
-            <div className="max-h-60 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950 p-2 divide-y divide-slate-800">
+            <div className="max-h-60 overflow-y-auto rounded-xl border border-gray-200 bg-gray-50 p-2 divide-y divide-gray-100">
               {serialsList.map((serial) => (
                 <div
                   key={serial}
-                  className="flex items-center justify-between px-3 py-2 bg-slate-900 rounded-lg my-1 border border-slate-800 shadow-xs"
+                  className="flex items-center justify-between px-3 py-2 bg-white rounded-lg my-1 shadow-sm"
                 >
-                  <span className="font-mono text-xs font-bold text-sky-300 tracking-wider">
+                  <span className="font-mono text-xs font-bold text-gray-800 tracking-wider">
                     {serial}
                   </span>
                   <button
@@ -372,7 +366,7 @@ export default function DistributorDash({ actor }) {
                     onClick={() =>
                       setSerialsList((current) => current.filter((item) => item !== serial))
                     }
-                    className="p-1 text-slate-400 hover:text-rose-400 transition cursor-pointer"
+                    className="p-1 text-gray-400 hover:text-red-600 transition"
                     aria-label={`Remove ${serial}`}
                   >
                     <Trash2 size={15} />
@@ -384,7 +378,7 @@ export default function DistributorDash({ actor }) {
         )}
 
         {/* Transfer Action to Destination Pharmacy */}
-        <form onSubmit={submitTransfer} className="mt-6 border-t border-slate-800 pt-6">
+        <form onSubmit={submitTransfer} className="mt-6 border-t border-[#EEEAF5] pt-6">
           <div className="grid gap-4 sm:grid-cols-2">
             <label className={labelClass}>
               Destination pharmacy actor ID *
@@ -398,7 +392,7 @@ export default function DistributorDash({ actor }) {
                 className={inputClass}
                 required
               />
-              <span className="mt-1 block text-xs text-slate-400 font-normal">
+              <span className="mt-1 block text-xs text-gray-500 font-normal">
                 Default ID 3: Mlimani Pharmacy
               </span>
             </label>
@@ -419,42 +413,42 @@ export default function DistributorDash({ actor }) {
         </form>
 
         {message && (
-          <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300 font-medium">
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
             ✓ {message}
           </div>
         )}
         {error && (
-          <div className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300" role="alert">
+          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">
             {error}
           </div>
         )}
       </section>
 
-      {/* Activity & Workflow */}
+      {/* Friend's Bottom Sections: Activity & Workflow */}
       <section className="mt-7 grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
+        <div className="rounded-2xl border border-[#E9E5F1] bg-white p-5">
           <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-sky-500/15 p-2.5 text-sky-400 border border-sky-500/30">
+            <div className="rounded-xl bg-purple-50 p-2.5 text-[#4926C8]">
               <Activity size={20} />
             </div>
             <div>
-              <h3 className="font-extrabold text-white">Recent supply activity</h3>
-              <p className="text-xs text-slate-400">Latest distribution and custody transfers</p>
+              <h3 className="font-extrabold text-[#242039]">Recent supply activity</h3>
+              <p className="text-xs text-gray-500">Latest distribution and custody transfers</p>
             </div>
           </div>
           <div className="mt-4 space-y-4">
             {activityLogs.length === 0 ? (
-              <p className="text-xs text-slate-500">No events logged in this session yet.</p>
+              <p className="text-xs text-gray-400">No events logged in this session yet.</p>
             ) : (
               activityLogs.map((log) => (
                 <div key={log.id} className="flex gap-3">
-                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/30">
+                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-purple-50 text-[#4926C8]">
                     <CheckCircle2 size={16} />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-bold text-white">{log.title}</p>
-                    <p className="mt-0.5 text-xs text-slate-400">{log.detail}</p>
-                    <p className="mt-1 text-[11px] text-slate-500">{log.at}</p>
+                    <p className="text-sm font-bold text-[#242039]">{log.title}</p>
+                    <p className="mt-0.5 text-xs text-gray-500">{log.detail}</p>
+                    <p className="mt-1 text-[11px] text-gray-400">{log.at}</p>
                   </div>
                 </div>
               ))
@@ -462,14 +456,14 @@ export default function DistributorDash({ actor }) {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
+        <div className="rounded-2xl border border-[#E9E5F1] bg-white p-5">
           <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-emerald-500/15 p-2.5 text-emerald-400 border border-emerald-500/30">
+            <div className="rounded-xl bg-emerald-50 p-2.5 text-emerald-700">
               <BadgeCheck size={20} />
             </div>
             <div>
-              <h3 className="font-extrabold text-white">Recommended workflow</h3>
-              <p className="text-xs text-slate-400">How distributors maintain chain-of-custody</p>
+              <h3 className="font-extrabold text-[#242039]">Recommended workflow</h3>
+              <p className="text-xs text-gray-500">How distributors maintain chain-of-custody</p>
             </div>
           </div>
           <ol className="mt-4 space-y-3">
@@ -478,15 +472,15 @@ export default function DistributorDash({ actor }) {
               'Record dispatch to the named destination pharmacy.',
               'Add location and reference details for each hand-off.'
             ].map((item, i) => (
-              <li key={item} className="flex gap-3 text-sm leading-6 text-slate-300">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-500/15 text-xs font-extrabold text-sky-400 border border-sky-500/30">
+              <li key={item} className="flex gap-3 text-sm leading-6 text-gray-600">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#F0ECFF] text-xs font-extrabold text-[#4926C8]">
                   {i + 1}
                 </span>
                 {item}
               </li>
             ))}
           </ol>
-          <div className="mt-5 rounded-xl bg-slate-950 p-3 text-xs leading-5 text-slate-400 border border-slate-800">
+          <div className="mt-5 rounded-xl bg-[#F8F6FC] p-3 text-xs leading-5 text-gray-500">
             Each custody transfer moves currentHolderId in the central database and appends an immutable event to the custody trail.
           </div>
         </div>
