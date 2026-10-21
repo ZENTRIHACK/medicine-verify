@@ -17,24 +17,24 @@ import { api } from '../api';
 import strings from '../strings.json';
 
 const inputClass =
-  'mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
-const labelClass = 'block text-xs font-bold text-slate-700';
+  'mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-3 text-sm text-white placeholder-slate-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30';
+const labelClass = 'block text-xs font-bold text-slate-300';
 const primaryButtonClass =
-  'inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-lg shadow-blue-500/20 px-4 py-3 text-sm transition disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-lg shadow-blue-500/30 px-5 py-3 text-sm transition disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer';
 const secondaryButtonClass =
-  'inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm font-semibold text-slate-200 transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer';
 
 function Metric({ icon: Icon, label, value, detail }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-slate-500">{label}</span>
-        <span className="rounded-xl bg-blue-50 p-2.5 text-blue-600">
+        <span className="text-sm font-semibold text-sky-400">{label}</span>
+        <span className="rounded-xl bg-sky-500/15 p-2.5 text-sky-400 border border-sky-500/30">
           <Icon size={20} />
         </span>
       </div>
-      <p className="mt-4 text-3xl font-extrabold text-slate-900">{value}</p>
-      <p className="mt-1 text-xs text-slate-500">{detail}</p>
+      <p className="mt-4 text-3xl font-extrabold text-white">{value}</p>
+      <p className="mt-1 text-xs text-slate-400">{detail}</p>
     </div>
   );
 }
@@ -183,18 +183,18 @@ export default function ManufacturerDash({ actor }) {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-7 sm:px-6 sm:py-10">
-      {/* Top Status Bar */}
+      {/* Top Status Bar with Luminous Sky Badge */}
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <span className="inline-flex items-center gap-2 rounded-full border border-purple-200 bg-purple-50 px-3.5 py-1.5 text-xs font-bold text-[#4926C8]">
+        <span className="inline-flex items-center gap-2 rounded-full border border-sky-500/30 bg-sky-500/15 px-3.5 py-1.5 text-xs font-bold text-sky-400">
           <ShieldCheck size={15} /> Authenticated Manufacturer Node · {actor?.name || 'Zenocare Labs'}
         </span>
       </div>
 
-      {/* Task 2: Aligned Hero Container Styling */}
+      {/* Hero Section */}
       <section className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 md:p-8 backdrop-blur-xl shadow-2xl mb-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div>
-            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 uppercase tracking-wider mb-3">
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-sky-500/15 text-sky-400 border border-sky-500/30 uppercase tracking-wider mb-3">
               ORIGIN OF THE SUPPLY CHAIN
             </span>
             <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight mb-2">
@@ -244,16 +244,16 @@ export default function ManufacturerDash({ actor }) {
       </div>
 
       {/* Form 1: Batch Registration Card */}
-      <section className="mt-7 rounded-3xl border border-[#E9E5F1] bg-white p-5 shadow-sm sm:p-6">
+      <section className="mt-7 rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-xl sm:p-8">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-[10px] font-extrabold tracking-[2px] text-[#4926C8] uppercase">
+            <p className="text-[10px] font-extrabold tracking-[2px] text-sky-400 uppercase">
               SUPPLY CHAIN WORKSPACE
             </p>
-            <h2 className="mt-1 text-xl font-extrabold text-[#242039]">
+            <h2 className="mt-1 text-xl font-extrabold text-white">
               Register medicine batch
             </h2>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-slate-400">
               Generate unique 16-character cryptographic serials and printable QR codes for each physical unit.
             </p>
           </div>
@@ -329,19 +329,19 @@ export default function ManufacturerDash({ actor }) {
         </form>
 
         {batchError && (
-          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">
+          <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300" role="alert">
             {batchError}
           </div>
         )}
 
         {/* QR Print View & Auto-fill Actions */}
         {serials && serials.length > 0 && (
-          <div className="mt-6 border-t border-[#EEEAF5] pt-6">
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
+          <div className="mt-6 border-t border-slate-800 pt-6">
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-300">
               <strong className="block text-sm font-bold">
                 ✓ Batch #{batchId} registered — {serials.length} pack serial(s) generated
               </strong>
-              <span className="text-xs text-emerald-700">
+              <span className="text-xs text-emerald-400">
                 Print QR codes for pack application or auto-fill the transfer form below to dispatch to a distributor.
               </span>
             </div>
@@ -367,22 +367,22 @@ export default function ManufacturerDash({ actor }) {
                   <Printer size={16} /> Print QR Codes
                 </button>
               </div>
-              <span className="text-xs font-semibold text-gray-500">
+              <span className="text-xs font-semibold text-slate-400">
                 {serials.length} serials for Batch #{batchId}
               </span>
             </div>
 
             {/* QR Card Grid with exact typography and spacing */}
-            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-6 p-4 rounded-2xl bg-gray-50 border border-gray-100">
+            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-6 p-4 rounded-2xl bg-slate-950 border border-slate-800">
               {serials.map((s) => (
                 <div
                   key={s}
-                  className="flex flex-col items-center justify-center p-4 border rounded-xl bg-white shadow-sm hover:shadow-md transition-all break-inside-avoid"
+                  className="flex flex-col items-center justify-center p-4 border border-slate-800 rounded-xl bg-slate-900 shadow-sm hover:border-slate-700 transition-all break-inside-avoid"
                 >
-                  <div className="mb-3 p-2 bg-white rounded border">
+                  <div className="mb-3 p-2 bg-white rounded border border-slate-700">
                     <QRCodeSVG value={window.location.origin + '/v/' + s} size={150} />
                   </div>
-                  <span className="font-mono text-xs text-gray-700 tracking-wider break-all select-all mt-2 text-center">
+                  <span className="font-mono text-xs text-slate-300 tracking-wider break-all select-all mt-2 text-center">
                     {s}
                   </span>
                 </div>
@@ -395,24 +395,24 @@ export default function ManufacturerDash({ actor }) {
       {/* Form 2: Custody Transfer Card */}
       <section
         id="transfer-custody-card"
-        className="mt-7 rounded-3xl border border-[#E9E5F1] bg-white p-5 shadow-sm sm:p-6"
+        className="mt-7 rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-xl sm:p-8"
       >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-[10px] font-extrabold tracking-[2px] text-[#4926C8] uppercase">
+            <p className="text-[10px] font-extrabold tracking-[2px] text-sky-400 uppercase">
               DOWNSTREAM HANDOFF
             </p>
-            <h2 className="mt-1 text-xl font-extrabold text-[#242039]">
+            <h2 className="mt-1 text-xl font-extrabold text-white">
               Transfer custody to distributor
             </h2>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-slate-400">
               Select an entire batch or enter serials to transfer ownership down the supply chain.
             </p>
           </div>
 
           {/* Inline Batch Selector Dropdown */}
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-gray-600">Transfer entire batch:</span>
+            <span className="text-xs font-bold text-slate-300">Transfer entire batch:</span>
             <select
               id="batch-select-dropdown"
               value={selectedBatchId}
@@ -424,7 +424,7 @@ export default function ManufacturerDash({ actor }) {
                   setTransferSerials(found.serials.join('\n'));
                 }
               }}
-              className="rounded-xl border border-[#E5E1EF] bg-white px-3 py-2 text-xs font-bold text-[#242039] outline-none transition focus:border-[#8067DE]"
+              className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-bold text-white outline-none transition focus:border-blue-500"
             >
               <option value="">[ Select Batch ▾ ]</option>
               {batches.map((b) => (
@@ -445,7 +445,7 @@ export default function ManufacturerDash({ actor }) {
               {serials && serials.length > 0 && (
                 <button
                   type="button"
-                  className="text-xs font-bold text-[#4926C8] hover:underline"
+                  className="text-xs font-bold text-sky-400 hover:underline cursor-pointer"
                   onClick={() => setTransferSerials(serials.join('\n'))}
                 >
                   Select All Serials from Batch #{batchId}
@@ -475,7 +475,7 @@ export default function ManufacturerDash({ actor }) {
               className={inputClass}
               required
             />
-            <span className="mt-1 block text-xs text-gray-500 font-normal">
+            <span className="mt-1 block text-xs text-slate-400 font-normal">
               Default ID 2: AfyaLink Distributors
             </span>
           </label>
@@ -493,42 +493,42 @@ export default function ManufacturerDash({ actor }) {
         </form>
 
         {transferError && (
-          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">
+          <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300" role="alert">
             {transferError}
           </div>
         )}
         {transferResult && (
-          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300">
             ✓ {strings.messages?.custodyTransferred || `Transferred ${transferResult.transferred} serial(s)`}
           </div>
         )}
       </section>
 
-      {/* Friend's Bottom Layout Sections: Activity & Workflow */}
+      {/* Activity & Workflow */}
       <section className="mt-7 grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-[#E9E5F1] bg-white p-5">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-purple-50 p-2.5 text-[#4926C8]">
+            <div className="rounded-xl bg-sky-500/15 p-2.5 text-sky-400 border border-sky-500/30">
               <Activity size={20} />
             </div>
             <div>
-              <h3 className="font-extrabold text-[#242039]">Recent supply activity</h3>
-              <p className="text-xs text-gray-500">Latest manufacturing and dispatch events</p>
+              <h3 className="font-extrabold text-white">Recent supply activity</h3>
+              <p className="text-xs text-slate-400">Latest manufacturing and dispatch events</p>
             </div>
           </div>
           <div className="mt-4 space-y-4">
             {activityLogs.length === 0 ? (
-              <p className="text-xs text-gray-400">No events logged in this session yet.</p>
+              <p className="text-xs text-slate-500">No events logged in this session yet.</p>
             ) : (
               activityLogs.map((log) => (
                 <div key={log.id} className="flex gap-3">
-                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-purple-50 text-[#4926C8]">
+                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/30">
                     <CheckCircle2 size={16} />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-bold text-[#242039]">{log.title}</p>
-                    <p className="mt-0.5 text-xs text-gray-500">{log.detail}</p>
-                    <p className="mt-1 text-[11px] text-gray-400">{log.at}</p>
+                    <p className="text-sm font-bold text-white">{log.title}</p>
+                    <p className="mt-0.5 text-xs text-slate-400">{log.detail}</p>
+                    <p className="mt-1 text-[11px] text-slate-500">{log.at}</p>
                   </div>
                 </div>
               ))
@@ -536,14 +536,14 @@ export default function ManufacturerDash({ actor }) {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-[#E9E5F1] bg-white p-5">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-emerald-50 p-2.5 text-emerald-700">
+            <div className="rounded-xl bg-emerald-500/15 p-2.5 text-emerald-400 border border-emerald-500/30">
               <BadgeCheck size={20} />
             </div>
             <div>
-              <h3 className="font-extrabold text-[#242039]">Recommended workflow</h3>
-              <p className="text-xs text-gray-500">How manufacturing contributes to the supply chain</p>
+              <h3 className="font-extrabold text-white">Recommended workflow</h3>
+              <p className="text-xs text-slate-400">How manufacturing contributes to the supply chain</p>
             </div>
           </div>
           <ol className="mt-4 space-y-3">
@@ -552,15 +552,15 @@ export default function ManufacturerDash({ actor }) {
               'Assign a unique code to each individual pack.',
               'Share the batch with an authorized distributor.'
             ].map((item, i) => (
-              <li key={item} className="flex gap-3 text-sm leading-6 text-gray-600">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#F0ECFF] text-xs font-extrabold text-[#4926C8]">
+              <li key={item} className="flex gap-3 text-sm leading-6 text-slate-300">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-500/15 text-xs font-extrabold text-sky-400 border border-sky-500/30">
                   {i + 1}
                 </span>
                 {item}
               </li>
             ))}
           </ol>
-          <div className="mt-5 rounded-xl bg-[#F8F6FC] p-3 text-xs leading-5 text-gray-500">
+          <div className="mt-5 rounded-xl bg-slate-950 p-3 text-xs leading-5 text-slate-400 border border-slate-800">
             For the production system, each event is cryptographically timestamped, recorded on the registry, and validated against the organization&apos;s permissions.
           </div>
         </div>

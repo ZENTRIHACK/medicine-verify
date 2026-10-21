@@ -136,34 +136,48 @@ export default function PublicVerify() {
     setShowScanner(true);
     setCameraError('');
 
+    // Pre-flight: check if camera hardware is available (fails on HTTP or denied perms)
+    if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+      setCameraError('Camera unavailable. Your browser may require HTTPS, or camera permissions are denied. Use gallery upload or manual input below.');
+      return;
+    }
+
     try {
       const { Html5Qrcode } = await import('html5-qrcode');
-      // small delay to let modal mount container element
-      setTimeout(async () => {
-        try {
-          const scanner = new Html5Qrcode('public-search-qr-reader');
-          scannerRef.current = scanner;
 
-          await scanner.start(
-            { facingMode: 'environment' },
-            { fps: 10, qrbox: { width: 240, height: 240 } },
-            (decodedText) => {
-              const clean = extractSerial(decodedText);
-              if (clean) {
-                void releaseScanner(scanner);
-                scannerRef.current = null;
-                setShowScanner(false);
-                navigate(`/v/${encodeURIComponent(clean)}`);
-              }
-            },
-            () => {}
-          );
-        } catch (err) {
-          setCameraError('Camera access failed: ' + (err?.message || err));
-        }
-      }, 150);
+      // Wait for the modal DOM container to mount (React batches state updates)
+      let container = null;
+      let isMounted = true;
+      for (let attempt = 0; attempt < 15; attempt++) {
+        container = document.getElementById('public-search-qr-reader');
+        if (container) break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      if (!container || !isMounted) {
+        setCameraError('Scanner container failed to mount. Please close and retry.');
+        return;
+      }
+
+      const scanner = new Html5Qrcode('public-search-qr-reader');
+      scannerRef.current = scanner;
+
+      await scanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 240, height: 240 } },
+        (decodedText) => {
+          const clean = extractSerial(decodedText);
+          if (clean) {
+            void releaseScanner(scanner);
+            scannerRef.current = null;
+            setShowScanner(false);
+            navigate(`/v/${encodeURIComponent(clean)}`);
+          }
+        },
+        () => { /* ignore per-frame parse noise */ }
+      );
     } catch (err) {
-      setCameraError('Could not load camera module: ' + (err?.message || err));
+      console.warn('Camera scanner start failed:', err);
+      setCameraError('Camera access failed: ' + (err?.message || err) + '. Try gallery upload below.');
     }
   };
 
@@ -174,6 +188,29 @@ export default function PublicVerify() {
     }
     setShowScanner(false);
     setCameraError('');
+  };
+
+  /** Gallery QR fallback: decode a QR code from a user-selected image file */
+  const handleGalleryQrUpload = async (event) => {
+    const file = event.currentTarget.files?.[0];
+    if (!file) return;
+    event.currentTarget.value = '';
+
+    try {
+      const { Html5Qrcode } = await import('html5-qrcode');
+      const scanner = new Html5Qrcode('public-gallery-qr-scratch');
+      const result = await scanner.scanFile(file, /* showImage= */ false);
+      scanner.clear();
+      const clean = extractSerial(result);
+      if (clean) {
+        await closeScanner();
+        navigate(`/v/${encodeURIComponent(clean)}`);
+      } else {
+        setCameraError('Could not extract a serial from the QR image. Try a clearer photo.');
+      }
+    } catch (err) {
+      setCameraError('QR decode from image failed: ' + (err?.message || err));
+    }
   };
 
   const handleOcrUpload = async (event) => {
@@ -343,9 +380,22 @@ export default function PublicVerify() {
                 {cameraError}
               </div>
             )}
-            <p className="mt-3 text-center text-xs text-slate-500">
-              Align the pack QR code inside the viewfinder to verify immediately.
-            </p>
+            <div className="mt-3 flex items-center justify-between">
+              <p className="text-xs text-slate-500">
+                Align the QR code inside the viewfinder, or upload a QR photo:
+              </p>
+              <label className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 transition cursor-pointer shrink-0 ml-2">
+                <ImageIcon size={14} className="text-blue-600" /> Upload QR Image
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleGalleryQrUpload}
+                  style={{ display: 'none' }}
+                />
+              </label>
+            </div>
+            {/* Hidden scratch container for gallery QR decode */}
+            <div id="public-gallery-qr-scratch" style={{ display: 'none' }} />
           </div>
         </div>
       )}
