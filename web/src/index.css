@@ -1,10 +1,13 @@
-/* Global Theme & Utility Harmonization for Zentriq */
+/* Vibrant Clinical / Hospital Blue Theme & Utility Harmonization for Zentriq */
 
-/* Primary Blues */
+/* Primary Hospital Blues & Cyans */
 .bg-blue-600 { background-color: #2563eb !important; }
 .bg-blue-700 { background-color: #1d4ed8 !important; }
 .bg-blue-800 { background-color: #1e40af !important; }
 .bg-blue-500 { background-color: #3b82f6 !important; }
+.bg-cyan-600 { background-color: #0891b2 !important; }
+.bg-cyan-500 { background-color: #06b6d4 !important; }
+
 .hover\:bg-blue-500:hover { background-color: #3b82f6 !important; }
 .hover\:bg-blue-600:hover { background-color: #2563eb !important; }
 .hover\:bg-blue-700:hover { background-color: #1d4ed8 !important; }
@@ -16,22 +19,30 @@
 
 .border-blue-500 { border-color: #3b82f6 !important; }
 .border-blue-600 { border-color: #2563eb !important; }
+.border-blue-500\/20 { border-color: rgba(59, 130, 246, 0.2) !important; }
+.bg-blue-500\/10 { background-color: rgba(59, 130, 246, 0.1) !important; }
 
-/* Slate Containers & Backgrounds */
+/* Luminous Medical Blue / Sky Highlights & Badges */
+.bg-sky-500\/15 { background-color: rgba(14, 165, 233, 0.15) !important; }
+.border-sky-500\/30 { border-color: rgba(14, 165, 233, 0.3) !important; }
+.text-sky-400 { color: #38bdf8 !important; }
+.text-sky-300 { color: #7dd3fc !important; }
+.text-sky-200 { color: #bae6fd !important; }
+.text-sky-100 { color: #e0f2fe !important; }
+
+/* Clean, High-Contrast Dark-Slate Panels */
 .bg-slate-950 { background-color: #020617 !important; }
 .bg-slate-900 { background-color: #0f172a !important; }
+.bg-slate-900\/90 { background-color: rgba(15, 23, 42, 0.9) !important; }
 .bg-slate-900\/80 { background-color: rgba(15, 23, 42, 0.8) !important; }
 .bg-slate-850 { background-color: #151e2e !important; }
 .bg-slate-800 { background-color: #1e293b !important; }
 .bg-slate-800\/80 { background-color: rgba(30, 41, 59, 0.8) !important; }
+.bg-slate-800\/50 { background-color: rgba(30, 41, 59, 0.5) !important; }
 .bg-slate-700 { background-color: #334155 !important; }
 .bg-slate-600 { background-color: #475569 !important; }
 .bg-slate-100 { background-color: #f1f5f9 !important; }
 .bg-slate-50  { background-color: #f8fafc !important; }
-
-.bg-blue-500\/10 { background-color: rgba(59, 130, 246, 0.1) !important; }
-.border-blue-500\/20 { border-color: rgba(59, 130, 246, 0.2) !important; }
-.backdrop-blur-xl { backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); }
 
 /* Slate Borders */
 .border-slate-800 { border-color: #1e293b !important; }
@@ -41,7 +52,7 @@
 .border-slate-300 { border-color: #cbd5e1 !important; }
 .border-slate-200 { border-color: #e2e8f0 !important; }
 
-/* High-Contrast Slate & White Text */
+/* Typography & Text */
 .text-white { color: #ffffff !important; }
 .text-slate-100 { color: #f1f5f9 !important; }
 .text-slate-200 { color: #e2e8f0 !important; }
@@ -54,16 +65,29 @@
 .text-slate-900 { color: #0f172a !important; }
 
 /* Shadows */
+.shadow-blue-500\/30 {
+  box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3), 0 4px 6px -4px rgba(37, 99, 235, 0.3) !important;
+}
 .shadow-blue-500\/20 {
-  box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.2), 0 4px 6px -4px rgba(59, 130, 246, 0.2) !important;
+  box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.2), 0 4px 6px -4px rgba(37, 99, 235, 0.2) !important;
 }
 
 /* Placeholders */
 .placeholder-slate-400::placeholder { color: #94a3b8 !important; }
 .placeholder-slate-500::placeholder { color: #64748b !important; }
 
-/* Brand Button Class */
-.btn-blue-brand {
+/* Clinical Rose Logout Button */
+.bg-rose-500\/10 { background-color: rgba(244, 63, 94, 0.1) !important; }
+.hover\:bg-rose-500\/20:hover { background-color: rgba(244, 63, 94, 0.2) !important; }
+.text-rose-400 { color: #fb7185 !important; }
+.border-rose-500\/20 { border-color: rgba(244, 63, 94, 0.2) !important; }
+
+/* Blur Utilities */
+.backdrop-blur-xl { backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); }
+.backdrop-blur-xs { backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+
+/* Vibrant Hospital Blue Action Button */
+.btn-clinical-blue {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -72,42 +96,25 @@
   color: #ffffff !important;
   font-weight: 600;
   border-radius: 0.75rem;
-  padding: 0.75rem 1rem;
+  padding: 0.75rem 1.25rem;
   font-size: 0.875rem;
-  box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.2), 0 4px 6px -4px rgba(59, 130, 246, 0.2) !important;
+  box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3), 0 4px 6px -4px rgba(37, 99, 235, 0.3) !important;
   transition: all 0.2s ease-in-out;
   border: 1px solid transparent;
+  cursor: pointer;
 }
-.btn-blue-brand:hover:not(:disabled) {
+.btn-clinical-blue:hover:not(:disabled) {
   background-color: #3b82f6 !important;
+  box-shadow: 0 12px 20px -3px rgba(37, 99, 235, 0.4) !important;
   transform: translateY(-1px);
 }
-.btn-blue-brand:disabled {
+.btn-clinical-blue:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
 /* Common High-Contrast Form Inputs */
 .form-input-slate {
-  width: 100%;
-  border-radius: 0.75rem;
-  border: 1px solid #cbd5e1;
-  background-color: #ffffff;
-  padding: 0.75rem 0.875rem;
-  font-size: 0.875rem;
-  color: #0f172a !important;
-  outline: none;
-  transition: all 0.2s;
-}
-.form-input-slate::placeholder {
-  color: #94a3b8 !important;
-}
-.form-input-slate:focus {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
-}
-
-.form-input-dark {
   width: 100%;
   border-radius: 0.75rem;
   border: 1px solid #334155;
@@ -118,10 +125,10 @@
   outline: none;
   transition: all 0.2s;
 }
-.form-input-dark::placeholder {
+.form-input-slate::placeholder {
   color: #94a3b8 !important;
 }
-.form-input-dark:focus {
+.form-input-slate:focus {
   border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
 }
