@@ -17,24 +17,24 @@ import { api } from '../api';
 import strings from '../strings.json';
 
 const inputClass =
-  'mt-1.5 w-full rounded-xl border border-[#E5E1EF] bg-white px-3.5 py-3 text-sm text-[#242039] outline-none transition focus:border-[#8067DE] focus:ring-2 focus:ring-purple-100';
-const labelClass = 'block text-xs font-bold text-[#514B67]';
+  'mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
+const labelClass = 'block text-xs font-bold text-slate-700';
 const primaryButtonClass =
-  'inline-flex items-center justify-center gap-2 rounded-xl bg-[#4926C8] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#3920A1] disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-lg shadow-blue-500/20 px-4 py-3 text-sm transition disabled:cursor-not-allowed disabled:opacity-50';
 const secondaryButtonClass =
-  'inline-flex items-center justify-center gap-2 rounded-xl border border-[#E5E1EF] bg-white px-4 py-3 text-sm font-bold text-[#242039] transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50';
 
 function Metric({ icon: Icon, label, value, detail }) {
   return (
-    <div className="rounded-2xl border border-[#E9E5F1] bg-white p-5 shadow-sm">
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-gray-500">{label}</span>
-        <span className="rounded-xl bg-purple-50 p-2.5 text-[#4926C8]">
+        <span className="text-sm font-semibold text-slate-500">{label}</span>
+        <span className="rounded-xl bg-blue-50 p-2.5 text-blue-600">
           <Icon size={20} />
         </span>
       </div>
-      <p className="mt-4 text-3xl font-extrabold text-[#242039]">{value}</p>
-      <p className="mt-1 text-xs text-gray-400">{detail}</p>
+      <p className="mt-4 text-3xl font-extrabold text-slate-900">{value}</p>
+      <p className="mt-1 text-xs text-slate-500">{detail}</p>
     </div>
   );
 }

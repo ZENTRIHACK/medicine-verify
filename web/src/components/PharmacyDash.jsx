@@ -14,28 +14,28 @@ import { api } from '../api';
 import strings from '../strings.json';
 
 const inputClass =
-  'mt-1.5 w-full rounded-xl border border-[#E5E1EF] bg-white px-3.5 py-3 text-sm text-[#242039] outline-none transition focus:border-[#18794E] focus:ring-2 focus:ring-emerald-100';
-const labelClass = 'block text-xs font-bold text-[#514B67]';
+  'mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
+const labelClass = 'block text-xs font-bold text-slate-700';
 const primaryButtonClass =
-  'inline-flex items-center justify-center gap-2 rounded-xl bg-[#18794E] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#136340] disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-lg shadow-blue-500/20 px-4 py-3 text-sm transition disabled:cursor-not-allowed disabled:opacity-50';
 const secondaryButtonClass =
-  'inline-flex items-center justify-center gap-2 rounded-xl border border-[#E5E1EF] bg-white px-4 py-3 text-sm font-bold text-[#242039] transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50';
 
 function Metric({ icon: Icon, label, value, detail, alert }) {
   return (
-    <div className="rounded-2xl border border-[#E9E5F1] bg-white p-5 shadow-sm">
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-gray-500">{label}</span>
+        <span className="text-sm font-semibold text-slate-500">{label}</span>
         <span
           className={`rounded-xl p-2.5 ${
-            alert ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-[#18794E]'
+            alert ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
           }`}
         >
           <Icon size={20} />
         </span>
       </div>
-      <p className="mt-4 text-3xl font-extrabold text-[#242039]">{value}</p>
-      <p className="mt-1 text-xs text-gray-400">{detail}</p>
+      <p className="mt-4 text-3xl font-extrabold text-slate-900">{value}</p>
+      <p className="mt-1 text-xs text-slate-500">{detail}</p>
     </div>
   );
 }
@@ -214,32 +214,32 @@ export default function PharmacyDash({ actor }) {
     <div className="mx-auto max-w-7xl px-4 py-7 sm:px-6 sm:py-10">
       {/* Top Status Bar */}
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3.5 py-1.5 text-xs font-bold text-[#18794E]">
+        <span className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3.5 py-1.5 text-xs font-bold text-blue-700">
           <ShieldCheck size={15} /> Authenticated Pharmacy Node · {actor?.name || 'Mlimani Pharmacy'}
         </span>
       </div>
 
-      {/* Hero Section matching Friend's Netlify Design */}
+      {/* Hero Section */}
       <section className="overflow-hidden rounded-3xl bg-[#0D3823] text-white shadow-sm">
         <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:items-center">
           <div>
             <p className="text-[10px] font-extrabold tracking-[2.4px] text-emerald-200 uppercase">
               LAST-MILE DISPENSING
             </p>
-            <h1 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">
+            <h1 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl text-white">
               Pharmacy portal
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-emerald-100">
               Record pharmacy stock receipt and dispensing events so a pack&apos;s journey can be reviewed later.
             </p>
             <div className="mt-5 flex flex-wrap gap-2">
-              <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold">
+              <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white">
                 Traceable pack records
               </span>
-              <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold">
+              <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white">
                 Double-dispense prevention
               </span>
-              <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold">
+              <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white">
                 Patient Care Verification
               </span>
             </div>
@@ -274,31 +274,31 @@ export default function PharmacyDash({ actor }) {
       </div>
 
       {/* Main Workspace: Side-by-side Scanner and Manual 16-character Entry */}
-      <section className="mt-7 rounded-3xl border border-[#E9E5F1] bg-white p-5 shadow-sm sm:p-6">
+      <section className="mt-7 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div>
-          <p className="text-[10px] font-extrabold tracking-[2px] text-[#18794E] uppercase">
+          <p className="text-[10px] font-extrabold tracking-[2px] text-blue-600 uppercase">
             POINT OF CARE WORKSPACE
           </p>
-          <h2 className="mt-1 text-xl font-extrabold text-[#242039]">
+          <h2 className="mt-1 text-xl font-extrabold text-slate-900">
             Verify and dispense medicine
           </h2>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-slate-600">
             Scan the pack QR code or enter the 16-character serial before handing the medicine to the patient.
           </p>
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
           {/* Scanner Pane */}
-          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-bold text-[#514B67] flex items-center gap-2">
-                <Camera size={18} className="text-[#18794E]" />
+              <label className="text-xs font-bold text-slate-700 flex items-center gap-2">
+                <Camera size={18} className="text-blue-600" />
                 Dispense Camera Scanner
               </label>
             </div>
             <div
               id="pharmacy-qr-reader"
-              className="overflow-hidden rounded-xl bg-white border border-gray-200"
+              className="overflow-hidden rounded-xl bg-white border border-slate-200"
               style={{ minHeight: '220px' }}
             />
             <div className="mt-3">
@@ -325,7 +325,7 @@ export default function PharmacyDash({ actor }) {
           </div>
 
           {/* Manual Entry Pane */}
-          <div className="flex flex-col justify-between rounded-2xl border border-gray-200 bg-gray-50 p-4">
+          <div className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <form onSubmit={handleManualSubmit}>
               <label htmlFor="pharmacy-serial-input" className={labelClass}>
                 Manual 16-character serial entry
@@ -349,12 +349,12 @@ export default function PharmacyDash({ actor }) {
                   <Send size={16} /> Dispense
                 </button>
               </div>
-              <span className="mt-2 block text-xs text-gray-500">
+              <span className="mt-2 block text-xs text-slate-500 font-normal">
                 16-character Base32 serial printed under the pack QR code.
               </span>
             </form>
 
-            <div className="mt-4 rounded-xl bg-emerald-50 p-3 text-xs leading-5 text-emerald-900 border border-emerald-100">
+            <div className="mt-4 rounded-xl bg-blue-50 p-3 text-xs leading-5 text-blue-900 border border-blue-200">
               Double-dispense protection active: if this pack was previously dispensed anywhere in the country, an immediate conflict alert is raised.
             </div>
           </div>
@@ -362,14 +362,14 @@ export default function PharmacyDash({ actor }) {
 
         {/* Loading indicator */}
         {loading && (
-          <p className="mt-4 text-sm font-semibold text-gray-600">
+          <p className="mt-4 text-sm font-semibold text-slate-600">
             Processing dispense request on central registry…
           </p>
         )}
 
         {/* Standard Error banner */}
         {error && (
-          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">
+          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 font-medium" role="alert">
             {error}
           </div>
         )}
@@ -409,7 +409,7 @@ export default function PharmacyDash({ actor }) {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: 'rgba(185, 28, 28, 0.90)',
+            backgroundColor: 'rgba(15, 23, 42, 0.85)',
             backdropFilter: 'blur(5px)',
             WebkitBackdropFilter: 'blur(5px)',
             zIndex: 9999,
@@ -433,20 +433,20 @@ export default function PharmacyDash({ actor }) {
               {strings.status?.conflict || 'DOUBLE DISPENSE CONFLICT'}
             </h2>
 
-            <p className="mt-2 text-sm text-gray-600">
+            <p className="mt-2 text-sm text-slate-600">
               This pack has already been recorded as dispensed. Do NOT release this medicine to the patient.
             </p>
 
             <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-left">
               <p className="text-sm text-red-900 mb-2">
                 <span className="font-bold">Previously dispensed by:</span>{' '}
-                <span className="font-extrabold text-gray-900">
+                <span className="font-extrabold text-slate-900">
                   {result.conflictWith?.actorName || 'Unknown'}
                 </span>
               </p>
               <p className="text-sm text-red-900">
                 <span className="font-bold">At:</span>{' '}
-                <span className="font-extrabold text-gray-900">
+                <span className="font-extrabold text-slate-900">
                   {result.conflictWith?.at
                     ? new Date(result.conflictWith.at).toLocaleString()
                     : 'Unknown'}
@@ -471,7 +471,7 @@ export default function PharmacyDash({ actor }) {
               <button
                 type="button"
                 onClick={() => setResult(null)}
-                className="w-full rounded-xl bg-red-600 py-3.5 text-sm font-extrabold text-white transition hover:bg-red-700 shadow-lg"
+                className="w-full rounded-xl bg-red-600 py-3.5 text-sm font-extrabold text-white transition hover:bg-red-700 shadow-lg cursor-pointer"
               >
                 Acknowledge Alert
               </button>
@@ -482,29 +482,29 @@ export default function PharmacyDash({ actor }) {
 
       {/* Friend's Bottom Sections: Activity & Workflow */}
       <section className="mt-7 grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-[#E9E5F1] bg-white p-5">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-emerald-50 p-2.5 text-[#18794E]">
+            <div className="rounded-xl bg-blue-50 p-2.5 text-blue-600">
               <Activity size={20} />
             </div>
             <div>
-              <h3 className="font-extrabold text-[#242039]">Recent supply activity</h3>
-              <p className="text-xs text-gray-500">Latest pharmacy dispensing events</p>
+              <h3 className="font-extrabold text-slate-900">Recent supply activity</h3>
+              <p className="text-xs text-slate-500">Latest pharmacy dispensing events</p>
             </div>
           </div>
           <div className="mt-4 space-y-4">
             {activityLogs.length === 0 ? (
-              <p className="text-xs text-gray-400">No events logged in this session yet.</p>
+              <p className="text-xs text-slate-400">No events logged in this session yet.</p>
             ) : (
               activityLogs.map((log) => (
                 <div key={log.id} className="flex gap-3">
-                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-[#18794E]">
+                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
                     <CheckCircle2 size={16} />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-bold text-[#242039]">{log.title}</p>
-                    <p className="mt-0.5 text-xs text-gray-500">{log.detail}</p>
-                    <p className="mt-1 text-[11px] text-gray-400">{log.at}</p>
+                    <p className="text-sm font-bold text-slate-900">{log.title}</p>
+                    <p className="mt-0.5 text-xs text-slate-600">{log.detail}</p>
+                    <p className="mt-1 text-[11px] text-slate-400">{log.at}</p>
                   </div>
                 </div>
               ))
@@ -512,14 +512,14 @@ export default function PharmacyDash({ actor }) {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-[#E9E5F1] bg-white p-5">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-center gap-3">
             <div className="rounded-xl bg-emerald-50 p-2.5 text-emerald-700">
               <BadgeCheck size={20} />
             </div>
             <div>
-              <h3 className="font-extrabold text-[#242039]">Recommended workflow</h3>
-              <p className="text-xs text-gray-500">How pharmacies safeguard patients</p>
+              <h3 className="font-extrabold text-slate-900">Recommended workflow</h3>
+              <p className="text-xs text-slate-500">How pharmacies safeguard patients</p>
             </div>
           </div>
           <ol className="mt-4 space-y-3">
@@ -528,15 +528,15 @@ export default function PharmacyDash({ actor }) {
               'Keep the pack code associated with stock records.',
               'Record dispensing so the pack can be flagged as used.'
             ].map((item, i) => (
-              <li key={item} className="flex gap-3 text-sm leading-6 text-gray-600">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#EBF7F0] text-xs font-extrabold text-[#18794E]">
+              <li key={item} className="flex gap-3 text-sm leading-6 text-slate-700">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-xs font-extrabold text-emerald-700">
                   {i + 1}
                 </span>
                 {item}
               </li>
             ))}
           </ol>
-          <div className="mt-5 rounded-xl bg-[#F8F6FC] p-3 text-xs leading-5 text-gray-500">
+          <div className="mt-5 rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-600 border border-slate-200">
             Dispensing updates the central registry in real-time, locking the pack so it cannot be re-dispensed or reused.
           </div>
         </div>

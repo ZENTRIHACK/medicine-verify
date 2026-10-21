@@ -16,7 +16,7 @@ export default function App() {
       <Route path="/" element={<Home />} />
       <Route path="/login" element={<Login />} />
       <Route path="/dashboard" element={<Dashboard />} />
-      <Route path="/verify" element={<SerialEntry />} />
+      <Route path="/verify" element={<PublicVerify />} />
       <Route path="/verify/:serial" element={<PublicVerify />} />
       <Route path="/v/:serial" element={<PublicVerify />} />
       <Route path="/manufacturer" element={<Navigate to="/dashboard" replace />} />

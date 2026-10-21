@@ -146,6 +146,10 @@ export const api = {
     return api.verify(serial);
   },
 
+  getSerial(serial) {
+    return api.verify(serial);
+  },
+
   verifyOcr(file, serial) {
     return api.ocr(serial, file);
   },
